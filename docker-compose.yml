@@ -1,6 +1,11 @@
-version: '3.9'
+# x-app-image for remote registry (CI/CD deployment)
+x-app-image: &app_image '${APP_IMAGE:-claude-agent-chat}:${APP_TAG:-latest}'
 
-x-app-image: &app_image '${APP_IMAGE:-ghcr.io/your-org/your-repo/app}:${APP_TAG:-latest}'
+# x-app-build for local development
+x-app-build: &app_build
+  build:
+    context: .
+    dockerfile: Dockerfile
 
 services:
   db:
@@ -83,7 +88,7 @@ services:
 
   # migrations run before app starts, re-created for each new image tag
   migrate:
-    image: *app_image
+    <<: *app_build
     depends_on:
       db:
         condition: service_healthy
@@ -116,7 +121,7 @@ services:
 
   # Background workers for BullMQ (cron + indexing, etc.)
   worker:
-    image: *app_image
+    <<: *app_build
     container_name: ex0-worker
     depends_on:
       db:
@@ -156,7 +161,8 @@ services:
 
   # App container (useful for self-host/preview via reverse proxy; in dev run pnpm dev)
   app:
-    image: *app_image
+    <<: *app_build
+    container_name: ex0-app
     depends_on:
       db:
         condition: service_healthy
@@ -185,6 +191,15 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
       MEILI_API_KEY: ${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
+      # Claude Agent SDK configuration
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
+      CLAUDE_SESSIONS_ROOT: /data/users
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
+    volumes:
+      - claude-sessions:/data/users
+    ports:
+      - '5050:5000'
+      - '3051:3001'
     profiles: ['selfhost', 'prod']
 
 volumes:
@@ -192,3 +207,4 @@ volumes:
   ex0-minio-data:
   ex0-redis-data:
   ex0-meili-data:
+  claude-sessions:  # Claude Agent session storage (persists across container restarts)

@@ -24,7 +24,8 @@ RUN pnpm run build
 # ---- Stage 2: Runtime --------------------------------------------------------
 FROM node:22-alpine AS runner
 
-RUN apk add --no-cache libc6-compat ca-certificates
+# Install runtime dependencies including bubblewrap for sandbox-runtime
+RUN apk add --no-cache libc6-compat ca-certificates bubblewrap
 RUN npm install -g pnpm@10.17.1
 
 WORKDIR /app
@@ -53,6 +54,10 @@ RUN chmod +x ./start.sh
 
 # Non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+# Create user sessions directory for Claude Agent
+RUN mkdir -p /data/users && chown -R nodejs:nodejs /data/users
+
 USER nodejs
 
 # Expose main app port and WebSocket port
@@ -61,6 +66,9 @@ EXPOSE 5000 3001
 # Environment variables for WebSocket
 ENV WS_PORT=3001
 ENV APP_URL=http://localhost:5000
+
+# Claude Agent sessions root directory
+ENV CLAUDE_SESSIONS_ROOT=/data/users
 
 # Start both servers
 CMD ["./start.sh"]
