@@ -15,7 +15,7 @@ function agentWebSocketPlugin() {
       // Return a post hook that runs after Vite server is fully ready
       return () => {
         // Lazy import the standalone bootstrap file
-        import('./src/server/ws-bootstrap.js').then(({ createAgentWebSocketServer }) => {
+        import('./src/server/ws-bootstrap.ts').then(({ createAgentWebSocketServer }) => {
           createAgentWebSocketServer(server.httpServer);
         }).catch(err => {
           console.error('[WS Plugin] Failed to load WebSocket server:', err);
