@@ -78,6 +78,13 @@
       "when": 1759087272411,
       "tag": "0010_chief_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1766268066951,
+      "tag": "0011_blue_machine_man",
+      "breakpoints": true
     }
   ]
 }

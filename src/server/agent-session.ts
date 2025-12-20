@@ -12,6 +12,9 @@ import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { WebSocket } from 'ws';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { db } from '~/db/db-config';
+import { agentSession } from '~/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Outbound message types sent to WebSocket clients
 export type OutboundMessage =
@@ -42,6 +45,7 @@ export class AgentSession {
   private clients: Set<WebSocket> = new Set();
   private claudeHome: string | undefined;
   private claudeHomeInitialized: boolean = false;
+  private dbRecordId: string | null = null;  // Database record ID
 
   constructor(config: AgentSessionConfig = {}) {
     this.config = config;
@@ -76,6 +80,70 @@ export class AgentSession {
         console.error(`[AgentSession] Failed to create CLAUDE_HOME directory:`, error);
         throw error;
       }
+    }
+  }
+
+  /**
+   * Persist session metadata to database
+   */
+  private async persistSessionToDatabase(sdkSessionId: string): Promise<void> {
+    if (!this.userId || !this.claudeHome || this.dbRecordId) {
+      return;
+    }
+
+    try {
+      // Insert or get existing record (upsert behavior)
+      const [existing] = await db
+        .select({ id: agentSession.id })
+        .from(agentSession)
+        .where(and(
+          eq(agentSession.userId, this.userId),
+          eq(agentSession.sdkSessionId, sdkSessionId)
+        ));
+
+      if (existing) {
+        this.dbRecordId = existing.id;
+        console.log(`[AgentSession] Found existing DB record: ${existing.id}`);
+      } else {
+        const [inserted] = await db
+          .insert(agentSession)
+          .values({
+            userId: this.userId,
+            sdkSessionId,
+            claudeHomePath: this.claudeHome,
+            title: null,  // Will be extracted later
+          })
+          .returning({ id: agentSession.id });
+
+        if (inserted) {
+          this.dbRecordId = inserted.id;
+          console.log(`[AgentSession] Created DB record: ${inserted.id}`);
+        }
+      }
+    } catch (error) {
+      console.error('[AgentSession] Failed to persist session to database:', error);
+      // Don't throw - database persistence is non-critical for SDK operation
+    }
+  }
+
+  /**
+   * Update session timestamp in database
+   */
+  private async updateSessionTimestamp(): Promise<void> {
+    if (!this.dbRecordId) {
+      return;
+    }
+
+    try {
+      await db
+        .update(agentSession)
+        .set({
+          lastMessageAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(agentSession.id, this.dbRecordId));
+    } catch (error) {
+      console.error('[AgentSession] Failed to update session timestamp:', error);
     }
   }
 
@@ -211,12 +279,19 @@ export class AgentSession {
         // Extract session_id from system:init event
         if (event.type === 'system' && event.subtype === 'init' && event.session_id) {
           this.sessionId = event.session_id;
+
+          // Persist session to database (if not already saved)
+          await this.persistSessionToDatabase(event.session_id);
+
           this.broadcast({ type: 'session_init', sessionId: event.session_id });
         }
 
         // Broadcast the raw SDK event
         this.broadcast({ type: 'message', event });
       }
+
+      // Update last message timestamp in database
+      await this.updateSessionTimestamp();
 
       // Signal completion
       this.broadcast({ type: 'done' });
