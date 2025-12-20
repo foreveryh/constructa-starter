@@ -27,9 +27,13 @@ export class SessionManager {
   private wsToSession: Map<WebSocket, AgentSession> = new Map();
   private config: AgentSessionConfig;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private sessionsRoot: string;
 
   constructor(config: AgentSessionConfig = {}) {
     this.config = config;
+    // Get sessions root from environment or use default
+    this.sessionsRoot = process.env.CLAUDE_SESSIONS_ROOT || '/tmp/claude-sessions';
+    console.log(`[SessionManager] Sessions root: ${this.sessionsRoot}`);
     this.startCleanup();
   }
 
@@ -45,8 +49,12 @@ export class SessionManager {
       }
     }
 
-    // Create new session
-    const session = new AgentSession(this.config);
+    // Create new session with user-specific configuration
+    const session = new AgentSession({
+      ...this.config,
+      userId,
+      sessionsRoot: this.sessionsRoot,
+    });
     const sessionKey = `${userId}-${Date.now()}`;
 
     this.sessions.set(sessionKey, {
