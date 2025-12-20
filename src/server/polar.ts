@@ -1,14 +1,21 @@
 import { Polar } from '@polar-sh/sdk';
 import { polarEnv } from '~/conf/polar';
 
-export const polar = new Polar({
-  accessToken: polarEnv.POLAR_ACCESS_TOKEN,
-  server: polarEnv.POLAR_SERVER,
-});
+// Polar is optional - only initialize if access token is configured
+export const isPolarEnabled = Boolean(polarEnv.POLAR_ACCESS_TOKEN);
+
+export const polar = isPolarEnabled
+  ? new Polar({
+      accessToken: polarEnv.POLAR_ACCESS_TOKEN,
+      server: polarEnv.POLAR_SERVER,
+    })
+  : (null as unknown as Polar); // Type cast to avoid null checks everywhere when Polar is disabled
 
 type CustomerIdentity = { id: string; email: string; name?: string | null };
 
 export async function upsertPolarCustomerByExternalId(user: CustomerIdentity) {
+  if (!isPolarEnabled) return null;
+
   const name = user.name ?? user.email.split('@')[0];
 
   const isUuid = /^[0-9a-fA-F-]{36}$/.test(user.id);
@@ -55,11 +62,14 @@ export async function upsertPolarCustomerByExternalId(user: CustomerIdentity) {
 }
 
 export async function createCustomerPortalUrlForUser(user: { id: string }) {
+  if (!isPolarEnabled) return null;
   const session = await polar.customerSessions.create({ externalCustomerId: user.id });
   return session.customerPortalUrl;
 }
 
 export async function listOrdersByExternalCustomerId(userId: string, limit = 50) {
+  if (!isPolarEnabled) return [];
+
   let customerId: string | null = null;
 
   try {
@@ -92,6 +102,8 @@ export async function listOrdersByExternalCustomerId(userId: string, limit = 50)
 }
 
 export async function ensureOrderInvoice(orderId: string) {
+  if (!isPolarEnabled) return null;
+
   try {
     return await polar.orders.invoice({ id: orderId });
   } catch {
@@ -111,5 +123,6 @@ export async function ensureOrderInvoice(orderId: string) {
 }
 
 export async function getCustomerStateByExternalId(userId: string) {
+  if (!isPolarEnabled) return null;
   return polar.customers.getStateExternal({ externalId: userId });
 }

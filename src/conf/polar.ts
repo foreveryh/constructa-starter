@@ -13,17 +13,18 @@ const metaEnv: RuntimeEnv =
 
 export const polarEnv = createEnv({
   server: {
+    // All Polar variables are now optional to allow running without billing
     POLAR_SERVER: z.enum(['sandbox', 'production']).default('sandbox'),
-    POLAR_ACCESS_TOKEN: z.string().min(1),
-    POLAR_WEBHOOK_SECRET: z.string().min(1),
-    POLAR_ORGANIZATION_ID: z.string().min(1),
-    POLAR_PRODUCT_PRO_MONTHLY: z.string().min(1),
-    POLAR_PRODUCT_BUSINESS_MONTHLY: z.string().min(1),
+    POLAR_ACCESS_TOKEN: z.string().optional(),
+    POLAR_WEBHOOK_SECRET: z.string().optional(),
+    POLAR_ORGANIZATION_ID: z.string().optional(),
+    POLAR_PRODUCT_PRO_MONTHLY: z.string().optional(),
+    POLAR_PRODUCT_BUSINESS_MONTHLY: z.string().optional(),
     POLAR_PRODUCT_CREDITS_50: z.string().optional(),
     POLAR_PRODUCT_CREDITS_100: z.string().optional(),
-    PUBLIC_URL: z.string().url(),
-    CHECKOUT_SUCCESS_URL: z.string().url(),
-    CHECKOUT_CANCEL_URL: z.string().url(),
+    PUBLIC_URL: z.string().url().optional(),
+    CHECKOUT_SUCCESS_URL: z.string().url().optional(),
+    CHECKOUT_CANCEL_URL: z.string().url().optional(),
   },
   clientPrefix: 'VITE_',
   client: {

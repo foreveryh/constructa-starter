@@ -15,25 +15,32 @@ const sessionCookieName = process.env.SESSION_COOKIE_NAME ?? 'ex0_session';
 
 const isEmailVerificationEnabled = process.env.ENABLE_EMAIL_VERIFICATION === 'true';
 
-const polarClient = new Polar({
-  accessToken: polarEnv.POLAR_ACCESS_TOKEN,
-  server: polarEnv.POLAR_SERVER,
-});
+// Polar is optional - only initialize if access token is configured
+const isPolarEnabled = Boolean(polarEnv.POLAR_ACCESS_TOKEN);
 
-const checkoutProducts = [
-  polarEnv.POLAR_PRODUCT_PRO_MONTHLY
-    ? { productId: polarEnv.POLAR_PRODUCT_PRO_MONTHLY, slug: 'pro' as const }
-    : null,
-  polarEnv.POLAR_PRODUCT_BUSINESS_MONTHLY
-    ? { productId: polarEnv.POLAR_PRODUCT_BUSINESS_MONTHLY, slug: 'business' as const }
-    : null,
-  polarEnv.POLAR_PRODUCT_CREDITS_50
-    ? { productId: polarEnv.POLAR_PRODUCT_CREDITS_50, slug: 'credits-50' as const }
-    : null,
-  polarEnv.POLAR_PRODUCT_CREDITS_100
-    ? { productId: polarEnv.POLAR_PRODUCT_CREDITS_100, slug: 'credits-100' as const }
-    : null,
-].filter(Boolean) as Array<{ productId: string; slug: string }>;
+const polarClient = isPolarEnabled
+  ? new Polar({
+      accessToken: polarEnv.POLAR_ACCESS_TOKEN,
+      server: polarEnv.POLAR_SERVER,
+    })
+  : null;
+
+const checkoutProducts = isPolarEnabled
+  ? ([
+      polarEnv.POLAR_PRODUCT_PRO_MONTHLY
+        ? { productId: polarEnv.POLAR_PRODUCT_PRO_MONTHLY, slug: 'pro' as const }
+        : null,
+      polarEnv.POLAR_PRODUCT_BUSINESS_MONTHLY
+        ? { productId: polarEnv.POLAR_PRODUCT_BUSINESS_MONTHLY, slug: 'business' as const }
+        : null,
+      polarEnv.POLAR_PRODUCT_CREDITS_50
+        ? { productId: polarEnv.POLAR_PRODUCT_CREDITS_50, slug: 'credits-50' as const }
+        : null,
+      polarEnv.POLAR_PRODUCT_CREDITS_100
+        ? { productId: polarEnv.POLAR_PRODUCT_CREDITS_100, slug: 'credits-100' as const }
+        : null,
+    ].filter(Boolean) as Array<{ productId: string; slug: string }>)
+  : [];
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -65,6 +72,8 @@ export const auth = betterAuth({
     deleteUser: {
       enabled: true,
       afterDelete: async (deletedUser) => {
+        // Only try to delete Polar customer if Polar is enabled
+        if (!polarClient) return;
         try {
           await polarClient.customers.deleteExternal({ externalId: deletedUser.id });
         } catch (error: any) {
@@ -95,22 +104,27 @@ export const auth = betterAuth({
         });
       },
     }),
-    polar({
-      client: polarClient,
-      createCustomerOnSignUp: true,
-      use: [
-        checkout({
-          products: checkoutProducts,
-          successUrl: polarEnv.CHECKOUT_SUCCESS_URL,
-          authenticatedUsersOnly: true,
-        }),
-        portal(),
-        webhooks({
-          secret: polarEnv.POLAR_WEBHOOK_SECRET,
-          ...polarWebhookHandlers,
-        }),
-      ],
-    }),
+    // Only include Polar plugin if Polar is configured
+    ...(isPolarEnabled && polarClient
+      ? [
+          polar({
+            client: polarClient,
+            createCustomerOnSignUp: true,
+            use: [
+              checkout({
+                products: checkoutProducts,
+                successUrl: polarEnv.CHECKOUT_SUCCESS_URL,
+                authenticatedUsersOnly: true,
+              }),
+              portal(),
+              webhooks({
+                secret: polarEnv.POLAR_WEBHOOK_SECRET,
+                ...polarWebhookHandlers,
+              }),
+            ],
+          }),
+        ]
+      : []),
   ],
   emailAndPassword: {
     enabled: true,
