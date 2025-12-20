@@ -13,6 +13,7 @@ import {
 } from '~/components/ui/sidebar';
 import DashboardIcon from 'virtual:icons/ri/dashboard-line';
 import ChatIcon from 'virtual:icons/ri/chat-3-line';
+import TerminalIcon from 'virtual:icons/ri/terminal-box-line';
 import ImageIcon from 'virtual:icons/ri/image-line';
 import FileTextIcon from 'virtual:icons/ri/file-text-line';
 import FlowChartIcon from 'virtual:icons/ri/flow-chart';
@@ -20,6 +21,7 @@ import CameraIcon from 'virtual:icons/ri/camera-line';
 import FileListIcon from 'virtual:icons/ri/file-list-line';
 import FileCodeIcon from 'virtual:icons/ri/file-code-line';
 import HomeSmileIcon from 'virtual:icons/ri/home-smile-line';
+import SparklingIcon from 'virtual:icons/ri/sparkling-line';
 
 const navData = {
   navMain: [
@@ -32,6 +34,16 @@ const navData = {
       title: 'Chat',
       url: '/dashboard/chat',
       icon: ChatIcon,
+    },
+    {
+      title: 'Agent Chat',
+      url: '/dashboard/agent-chat',
+      icon: TerminalIcon,
+    },
+    {
+      title: 'Claude Chat',
+      url: '/dashboard/claude-chat',
+      icon: SparklingIcon,
     },
     {
       title: 'Image Chat',

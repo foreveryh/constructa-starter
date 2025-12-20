@@ -1,11 +1,29 @@
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { defineConfig, loadEnv, type ConfigEnv } from 'vite';
+import { defineConfig, loadEnv, type ConfigEnv, type ViteDevServer } from 'vite';
 import tsConfigPaths from 'vite-tsconfig-paths';
 import browserEcho from '@browser-echo/vite';
 import Icons from 'unplugin-icons/vite';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
+
+// WebSocket plugin for Agent Chat - uses standalone bootstrap to avoid path alias issues
+function agentWebSocketPlugin() {
+  return {
+    name: 'agent-websocket',
+    configureServer(server: ViteDevServer) {
+      // Return a post hook that runs after Vite server is fully ready
+      return () => {
+        // Lazy import the standalone bootstrap file
+        import('./src/server/ws-bootstrap.js').then(({ createAgentWebSocketServer }) => {
+          createAgentWebSocketServer(server.httpServer);
+        }).catch(err => {
+          console.error('[WS Plugin] Failed to load WebSocket server:', err);
+        });
+      };
+    },
+  };
+}
 
 export default ({ mode }: ConfigEnv) => {
   // Regression in TanStack Start RC1: loadEnv now keeps the VITE_ prefix, so we
@@ -25,6 +43,7 @@ export default ({ mode }: ConfigEnv) => {
       tsConfigPaths({
         projects: ['./tsconfig.json'],
       }),
+      agentWebSocketPlugin(), // Agent WebSocket server
       tanstackStart(),
       nitro(),
       viteReact(),

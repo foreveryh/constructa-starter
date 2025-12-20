@@ -46,11 +46,21 @@ COPY --from=builder /app/src ./src
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
+# Copy WebSocket server and startup script
+COPY --from=builder /app/ws-server.mjs ./ws-server.mjs
+COPY --from=builder /app/start.sh ./start.sh
+RUN chmod +x ./start.sh
+
 # Non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
-EXPOSE 5000
+# Expose main app port and WebSocket port
+EXPOSE 5000 3001
 
-# TanStack Start default entry
-CMD ["node", ".output/server/index.mjs"]
+# Environment variables for WebSocket
+ENV WS_PORT=3001
+ENV APP_URL=http://localhost:5000
+
+# Start both servers
+CMD ["./start.sh"]
