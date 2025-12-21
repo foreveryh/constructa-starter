@@ -210,6 +210,8 @@ export function disconnect(): void {
  */
 export const ClaudeAgentWSAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }: ChatModelRunOptions) {
+    console.log('[WS Adapter] run() called with', messages.length, 'messages');
+
     // 1. Extract the latest user message
     const lastMessage = messages.at(-1);
     if (!lastMessage || lastMessage.role !== 'user') {
@@ -247,12 +249,15 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
     // 4. Send chat message
     try {
+      console.log('[WS Adapter] Sending chat message:', { type: 'chat', content: prompt.substring(0, 50), sessionId: currentSessionId });
       await send({
         type: 'chat',
         content: prompt,
         sessionId: currentSessionId,
       });
+      console.log('[WS Adapter] Message sent successfully');
     } catch (connectError) {
+      console.error('[WS Adapter] Failed to send message:', connectError);
       throw new Error('Failed to connect to WebSocket server');
     }
 
