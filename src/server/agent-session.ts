@@ -10,6 +10,8 @@
 
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { WebSocket } from 'ws';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 
 // Outbound message types sent to WebSocket clients
 export type OutboundMessage =
@@ -24,20 +26,57 @@ export interface AgentSessionConfig {
   baseURL?: string;
   model?: string;
   cwd?: string;
+  userId?: string;           // User ID for isolation
+  sessionsRoot?: string;     // Root directory for user sessions
 }
 
 export class AgentSession {
   public sessionId: string | null = null;
   public lastActivity: number = Date.now();
   public error: Error | string | undefined;
+  public readonly userId: string | undefined;
 
   private config: AgentSessionConfig;
   private abortController: AbortController | undefined;
   private isBusy: boolean = false;
   private clients: Set<WebSocket> = new Set();
+  private claudeHome: string | undefined;
+  private claudeHomeInitialized: boolean = false;
 
   constructor(config: AgentSessionConfig = {}) {
     this.config = config;
+    this.userId = config.userId;
+
+    // Calculate user-specific CLAUDE_HOME path
+    if (config.userId && config.sessionsRoot) {
+      // Sanitize userId to prevent path traversal attacks
+      const safeUserId = this.sanitizeUserId(config.userId);
+      this.claudeHome = path.join(config.sessionsRoot, safeUserId);
+    }
+  }
+
+  /**
+   * Sanitize userId to prevent path traversal and other security issues
+   */
+  private sanitizeUserId(userId: string): string {
+    // Remove any path separators and dangerous characters
+    return userId.replace(/[\/\\\.]+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  /**
+   * Ensure the CLAUDE_HOME directory exists
+   */
+  private async ensureClaudeHomeExists(): Promise<void> {
+    if (this.claudeHome && !this.claudeHomeInitialized) {
+      try {
+        await mkdir(this.claudeHome, { recursive: true });
+        this.claudeHomeInitialized = true;
+        console.log(`[AgentSession] Created CLAUDE_HOME directory: ${this.claudeHome}`);
+      } catch (error) {
+        console.error(`[AgentSession] Failed to create CLAUDE_HOME directory:`, error);
+        throw error;
+      }
+    }
   }
 
   /**
@@ -127,8 +166,17 @@ export class AgentSession {
     this.lastActivity = Date.now();
 
     try {
+      // Ensure user-specific CLAUDE_HOME directory exists
+      await this.ensureClaudeHomeExists();
+
       // Build environment variables for custom API endpoint
       const customEnv: Record<string, string | undefined> = { ...process.env };
+
+      // Set user-specific CLAUDE_HOME for session isolation
+      if (this.claudeHome) {
+        customEnv.CLAUDE_HOME = this.claudeHome;
+        console.log(`[AgentSession] CLAUDE_HOME set to ${this.claudeHome}`);
+      }
 
       if (this.config.apiKey) {
         customEnv.ANTHROPIC_API_KEY = this.config.apiKey;
