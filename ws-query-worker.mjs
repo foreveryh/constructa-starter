@@ -24,9 +24,14 @@ process.stdin.on('data', (chunk) => {
 process.stdin.on('end', async () => {
   try {
     const request = JSON.parse(inputData);
-    const { prompt, sessionId } = request;
+    const { prompt, sdkResumeId } = request;
 
-    console.error(`[Worker] Starting query, CLAUDE_HOME: ${process.env.CLAUDE_HOME}, HOME: ${process.env.HOME}`);
+    console.error(`[Worker] Starting query`);
+    console.error(`[Worker]   CLAUDE_HOME: ${process.env.CLAUDE_HOME}`);
+    console.error(`[Worker]   CWD (Workspace): ${config.cwd}`);
+    if (sdkResumeId) {
+      console.error(`[Worker]   SDK Resume ID: ${sdkResumeId}`);
+    }
 
     const stream = query({
       prompt,
@@ -35,7 +40,7 @@ process.stdin.on('end', async () => {
         model: config.model,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-        ...(sessionId && { resume: sessionId }),
+        ...(sdkResumeId && { resume: sdkResumeId }),
       },
     });
 

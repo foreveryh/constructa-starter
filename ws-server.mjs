@@ -12,6 +12,7 @@
  */
 
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -46,38 +47,59 @@ process.on('unhandledRejection', (reason) => {
 
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
 
-// Track initialized CLAUDE_HOME directories
-const initializedHomes = new Set();
+// Track initialized directories
+const initializedDirs = new Set();
+
+// Map workspace sessionId to SDK sessionId for resume
+// Structure: { workspaceSessionId: sdkSessionId }
+const sessionMapping = new Map();
 
 /**
- * Sanitize userId to prevent path traversal attacks
+ * Generate a unique session ID
  */
-function sanitizeUserId(userId) {
-  return userId.replace(/[\/\\\.]+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
+function generateSessionId() {
+  return crypto.randomUUID();
+}
+
+/**
+ * Sanitize userId/sessionId to prevent path traversal attacks
+ */
+function sanitizeId(id) {
+  return id.replace(/[\/\\\.]+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 /**
  * Get user-specific CLAUDE_HOME path
  */
 function getClaudeHome(userId) {
-  const safeUserId = sanitizeUserId(userId);
+  const safeUserId = sanitizeId(userId);
   return path.join(SESSIONS_ROOT, safeUserId);
 }
 
 /**
- * Ensure CLAUDE_HOME directory exists
+ * Get session-specific workspace path
+ * Structure: /data/users/{userId}/sessions/{sessionId}/workspace/
  */
-async function ensureClaudeHomeExists(claudeHome) {
-  if (initializedHomes.has(claudeHome)) {
+function getSessionWorkspace(userId, sessionId) {
+  const safeUserId = sanitizeId(userId);
+  const safeSessionId = sanitizeId(sessionId);
+  return path.join(SESSIONS_ROOT, safeUserId, 'sessions', safeSessionId, 'workspace');
+}
+
+/**
+ * Ensure directory exists
+ */
+async function ensureDirExists(dirPath) {
+  if (initializedDirs.has(dirPath)) {
     return;
   }
 
   try {
-    await mkdir(claudeHome, { recursive: true });
-    initializedHomes.add(claudeHome);
-    console.log(`[WS Server] Created CLAUDE_HOME: ${claudeHome}`);
+    await mkdir(dirPath, { recursive: true });
+    initializedDirs.add(dirPath);
+    console.log(`[WS Server] Created directory: ${dirPath}`);
   } catch (error) {
-    console.error(`[WS Server] Failed to create CLAUDE_HOME:`, error);
+    console.error(`[WS Server] Failed to create directory:`, error);
     throw error;
   }
 }
@@ -95,6 +117,7 @@ async function authenticateRequest(request) {
     if (!response.ok) return null;
 
     const data = await response.json();
+    console.log('[WS Server] Auth response:', JSON.stringify({ userId: data?.user?.id, email: data?.user?.email }));
     if (!data?.user?.id) return null;
 
     return { id: data.user.id };
@@ -114,7 +137,7 @@ function sendMessage(ws, msg) {
 }
 
 /**
- * Handle chat message using child process for user isolation
+ * Handle chat message using child process for user and session isolation
  */
 async function handleChat(ws, prompt, resumeSessionId) {
   // Kill any existing worker for this connection
@@ -124,17 +147,33 @@ async function handleChat(ws, prompt, resumeSessionId) {
   }
 
   try {
-    // Get user-specific CLAUDE_HOME
+    // Get or generate workspace session ID
+    const workspaceSessionId = resumeSessionId || generateSessionId();
+
+    // Look up SDK session ID for resume (if this is a continuation)
+    const sdkResumeId = resumeSessionId ? sessionMapping.get(resumeSessionId) : null;
+
+    // Get user-specific CLAUDE_HOME (for SDK session storage)
     const claudeHome = getClaudeHome(ws.userId);
-    await ensureClaudeHomeExists(claudeHome);
-    console.log(`[WS Server] User ${ws.userId} CLAUDE_HOME: ${claudeHome}`);
+    await ensureDirExists(claudeHome);
+
+    // Get session-specific workspace (for Agent file operations)
+    const workspacePath = getSessionWorkspace(ws.userId, workspaceSessionId);
+    await ensureDirExists(workspacePath);
+
+    console.log(`[WS Server] User ${ws.userId} Session ${workspaceSessionId}`);
+    console.log(`[WS Server]   CLAUDE_HOME: ${claudeHome}`);
+    console.log(`[WS Server]   Workspace: ${workspacePath}`);
+    if (sdkResumeId) {
+      console.log(`[WS Server]   SDK Resume ID: ${sdkResumeId}`);
+    }
 
     // Build environment for worker process
     const workerEnv = { ...process.env };
     // Set both CLAUDE_HOME and HOME - SDK might use either
     workerEnv.CLAUDE_HOME = claudeHome;
     workerEnv.HOME = claudeHome;  // Override HOME so os.homedir() returns user dir
-    workerEnv.WORKER_CWD = config.cwd;
+    workerEnv.WORKER_CWD = workspacePath;  // Per-Session workspace
     if (config.apiKey) workerEnv.ANTHROPIC_API_KEY = config.apiKey;
     if (config.baseURL) {
       workerEnv.ANTHROPIC_BASE_URL = config.baseURL;
@@ -150,9 +189,13 @@ async function handleChat(ws, prompt, resumeSessionId) {
     ws.workerProcess = worker;
 
     // Send query request to worker
-    const request = JSON.stringify({ prompt, sessionId: resumeSessionId });
+    // Pass sdkResumeId for SDK conversation resume
+    const request = JSON.stringify({ prompt, sdkResumeId });
     worker.stdin.write(request);
     worker.stdin.end();
+
+    // Track our workspace session ID
+    ws.workspaceSessionId = workspaceSessionId;
 
     // Read responses line by line
     const rl = createInterface({ input: worker.stdout });
@@ -164,8 +207,17 @@ async function handleChat(ws, prompt, resumeSessionId) {
         if (msg.type === 'event') {
           const event = msg.event;
           if (event.type === 'system' && event.subtype === 'init' && event.session_id) {
-            ws.sessionId = event.session_id;
-            sendMessage(ws, { type: 'session_init', sessionId: event.session_id });
+            // Store SDK's session_id for future resume
+            ws.sdkSessionId = event.session_id;
+            // Store mapping: workspaceSessionId -> sdkSessionId
+            sessionMapping.set(ws.workspaceSessionId, event.session_id);
+            console.log(`[WS Server] Session mapping: ${ws.workspaceSessionId} -> ${event.session_id}`);
+            // Send our workspace sessionId to client (they'll use this for resume)
+            sendMessage(ws, {
+              type: 'session_init',
+              sessionId: ws.workspaceSessionId,
+              sdkSessionId: event.session_id,
+            });
           }
           sendMessage(ws, { type: 'message', event });
         } else if (msg.type === 'done') {
