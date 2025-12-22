@@ -22,8 +22,11 @@ export const agentSession = pgTable('agent_session', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 
-  // SDK session ID (JSONL filename without .jsonl extension)
+  // SDK session ID (our workspace session ID, used for directory paths)
   sdkSessionId: text('sdk_session_id').notNull(),
+
+  // Real SDK session ID (the actual session ID from Claude Agent SDK for resume)
+  realSdkSessionId: text('real_sdk_session_id'),
 
   // Session title (extracted from first user message or AI-generated)
   title: text('title'),

@@ -13,7 +13,7 @@
 
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -53,6 +53,171 @@ const initializedDirs = new Set();
 // Map workspace sessionId to SDK sessionId for resume
 // Structure: { workspaceSessionId: sdkSessionId }
 const sessionMapping = new Map();
+
+/**
+ * Persist session to database via API
+ * @param {string} cookie - User's auth cookie
+ * @param {string} workspaceSessionId - Our workspace session ID (used as sdkSessionId in DB)
+ * @param {string} realSdkSessionId - The actual SDK's session ID (stored in title for now)
+ * @param {string} claudeHomePath - Path to CLAUDE_HOME
+ */
+async function persistSession(cookie, workspaceSessionId, realSdkSessionId, claudeHomePath) {
+  try {
+    const response = await fetch(`${APP_URL}/api/agent-sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        cookie,
+      },
+      body: JSON.stringify({
+        sdkSessionId: workspaceSessionId,
+        claudeHomePath,
+        // Store the real SDK session ID in a way we can retrieve it
+        // Using title temporarily until we add a proper column
+        realSdkSessionId,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[WS Server] Failed to persist session:', response.status, await response.text());
+      return;
+    }
+
+    const result = await response.json();
+    console.log(`[WS Server] Session persisted: ${result.id} (created: ${result.created})`);
+  } catch (error) {
+    console.error('[WS Server] Error persisting session:', error);
+  }
+}
+
+/**
+ * Load session data from database
+ * Returns full session info including realSdkSessionId and claudeHomePath
+ */
+async function loadSessionFromDb(cookie, workspaceSessionId) {
+  try {
+    const response = await fetch(`${APP_URL}/api/agent-sessions/by-sdk-id/${workspaceSessionId}`, {
+      headers: { cookie },
+    });
+
+    if (!response.ok) {
+      console.log(`[WS Server] Session not found in DB: ${workspaceSessionId}`);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`[WS Server] Loaded session from DB: realSdkSessionId=${data.realSdkSessionId}, claudeHomePath=${data.claudeHomePath}`);
+    return data;
+  } catch (error) {
+    console.error('[WS Server] Error loading session from DB:', error);
+    return null;
+  }
+}
+
+/**
+ * Locate session JSONL file across project directories
+ * JSONL files are stored at: CLAUDE_HOME/.claude/projects/{project}/{sessionId}.jsonl
+ */
+async function locateSessionFile(claudeHome, sessionId) {
+  const projectsRoot = path.join(claudeHome, '.claude', 'projects');
+
+  try {
+    await access(projectsRoot);
+  } catch {
+    console.log(`[WS Server] Projects root not found: ${projectsRoot}`);
+    return null;
+  }
+
+  try {
+    const entries = await readdir(projectsRoot, { withFileTypes: true });
+    const projectDirs = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(projectsRoot, e.name));
+
+    for (const projectDir of projectDirs) {
+      const sessionPath = path.join(projectDir, `${sessionId}.jsonl`);
+      try {
+        await access(sessionPath);
+        return sessionPath;
+      } catch {
+        // Continue to next project directory
+      }
+    }
+  } catch (error) {
+    console.error('[WS Server] Error scanning project directories:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Parse JSONL content into SDK messages
+ * Normalizes sessionId to session_id and filters invalid entries
+ */
+function parseJsonlContent(content) {
+  if (!content) return [];
+
+  const lines = content.split(/\r?\n/);
+  const messages = [];
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      // Skip summary type messages
+      if (parsed.type?.toLowerCase() === 'summary') continue;
+
+      // Must have message field
+      if (!parsed.message) continue;
+
+      // Normalize sessionId to session_id
+      const normalized = { ...parsed };
+      if ('sessionId' in normalized) {
+        normalized.session_id = normalized.sessionId;
+        delete normalized.sessionId;
+      }
+
+      messages.push(normalized);
+    } catch {
+      // Skip malformed JSON lines
+      continue;
+    }
+  }
+
+  return messages;
+}
+
+/**
+ * Load messages for a session from JSONL file
+ * @param {string} claudeHome - Path to CLAUDE_HOME for this user
+ * @param {string} sessionId - SDK session ID to load messages for
+ * @returns {Promise<Array>} Array of SDK messages
+ */
+async function loadMessages(claudeHome, sessionId) {
+  if (!sessionId) {
+    return [];
+  }
+
+  const filePath = await locateSessionFile(claudeHome, sessionId);
+  if (!filePath) {
+    console.log(`[WS Server] Session file not found for: ${sessionId}`);
+    return [];
+  }
+
+  try {
+    console.log(`[WS Server] Loading messages from: ${filePath}`);
+    const content = await readFile(filePath, 'utf8');
+    const messages = parseJsonlContent(content);
+    console.log(`[WS Server] Loaded ${messages.length} messages for session: ${sessionId}`);
+    return messages;
+  } catch (error) {
+    console.error(`[WS Server] Failed to read session file: ${filePath}`, error);
+    return [];
+  }
+}
 
 /**
  * Generate a unique session ID
@@ -200,6 +365,15 @@ async function handleChat(ws, prompt, resumeSessionId) {
     // Read responses line by line
     const rl = createInterface({ input: worker.stdout });
 
+    // Handle readline errors (e.g., when worker is killed abruptly)
+    rl.on('error', (error) => {
+      console.log('[WS Server] Readline error (expected on abort):', error.message);
+    });
+
+    rl.on('close', () => {
+      // Readline closed, worker output ended
+    });
+
     rl.on('line', (line) => {
       try {
         const msg = JSON.parse(line);
@@ -212,6 +386,10 @@ async function handleChat(ws, prompt, resumeSessionId) {
             // Store mapping: workspaceSessionId -> sdkSessionId
             sessionMapping.set(ws.workspaceSessionId, event.session_id);
             console.log(`[WS Server] Session mapping: ${ws.workspaceSessionId} -> ${event.session_id}`);
+
+            // Persist session to database (use workspaceSessionId as the identifier)
+            persistSession(ws.cookie, ws.workspaceSessionId, event.session_id, claudeHome);
+
             // Send our workspace sessionId to client (they'll use this for resume)
             sendMessage(ws, {
               type: 'session_init',
@@ -235,14 +413,26 @@ async function handleChat(ws, prompt, resumeSessionId) {
       }
     });
 
+    // Handle stdout errors (e.g., when worker is killed)
+    worker.stdout.on('error', (error) => {
+      console.log('[WS Server] Worker stdout error (expected on abort):', error.message);
+    });
+
     // Log worker stderr
     worker.stderr.on('data', (data) => {
       console.log(`[Worker ${ws.userId}]`, data.toString().trim());
     });
 
+    worker.stderr.on('error', (error) => {
+      console.log('[WS Server] Worker stderr error:', error.message);
+    });
+
     // Handle worker exit
-    worker.on('close', (code) => {
-      if (code !== 0) {
+    worker.on('close', (code, signal) => {
+      if (signal) {
+        // Killed by signal (e.g., abort) - this is expected
+        console.log(`[WS Server] Worker killed by signal ${signal}`);
+      } else if (code !== 0 && code !== null) {
         console.error(`[WS Server] Worker exited with code ${code}`);
       }
       ws.workerProcess = null;
@@ -292,8 +482,85 @@ async function handleMessage(ws, msg) {
       await handleChat(ws, message.content, message.sessionId);
       break;
 
+    case 'resume':
+      // Resume a previous session
+      if (!message.sessionId) {
+        sendMessage(ws, {
+          type: 'error',
+          code: 'invalid_message',
+          message: 'Missing sessionId for resume',
+          retriable: false,
+        });
+        return;
+      }
+      // Store the workspace session ID for future chats
+      ws.workspaceSessionId = message.sessionId;
+
+      // Load session data from database (includes realSdkSessionId and claudeHomePath)
+      let sessionData = null;
+      let resumeSdkSessionId = sessionMapping.get(message.sessionId);
+
+      if (ws.cookie) {
+        sessionData = await loadSessionFromDb(ws.cookie, message.sessionId);
+        if (sessionData) {
+          if (sessionData.realSdkSessionId) {
+            resumeSdkSessionId = sessionData.realSdkSessionId;
+            // Cache it in memory for future use
+            sessionMapping.set(message.sessionId, resumeSdkSessionId);
+          }
+        }
+      }
+
+      console.log(`[WS Server] Resuming session: ${message.sessionId} -> SDK: ${resumeSdkSessionId || 'not found'}`);
+
+      // Send confirmation back to client
+      sendMessage(ws, {
+        type: 'session_init',
+        sessionId: message.sessionId,
+        sdkSessionId: resumeSdkSessionId || null,
+      });
+
+      // Load and send historical messages if we have session data
+      if (resumeSdkSessionId && sessionData?.claudeHomePath) {
+        const messages = await loadMessages(sessionData.claudeHomePath, resumeSdkSessionId);
+        if (messages.length > 0) {
+          console.log(`[WS Server] Sending ${messages.length} historical messages to client`);
+          sendMessage(ws, {
+            type: 'messages_loaded',
+            messages,
+          });
+        }
+      }
+      break;
+
     case 'abort':
       ws.abortController?.abort('user_interrupt');
+      // Gracefully terminate worker process if running
+      if (ws.workerProcess) {
+        const worker = ws.workerProcess;
+        console.log('[WS Server] Aborting worker process');
+
+        // Send SIGTERM first (graceful shutdown)
+        worker.kill('SIGTERM');
+
+        // Set up a timeout to force kill if worker doesn't exit
+        const forceKillTimeout = setTimeout(() => {
+          if (ws.workerProcess === worker) {
+            console.log('[WS Server] Force killing unresponsive worker');
+            worker.kill('SIGKILL');
+          }
+        }, 2000);
+
+        // Clear the timeout when worker exits
+        worker.once('close', () => {
+          clearTimeout(forceKillTimeout);
+          // Notify client that abort completed
+          sendMessage(ws, { type: 'aborted' });
+        });
+      } else {
+        // No worker to abort, just acknowledge
+        sendMessage(ws, { type: 'aborted' });
+      }
       break;
 
     case 'ping':
@@ -379,6 +646,7 @@ wss.on('connection', async (ws, request) => {
   }
 
   ws.userId = user.id;
+  ws.cookie = request.headers.cookie || '';  // Store cookie for API calls
   ws.isAlive = true;
   isAuthenticated = true;
   console.log(`[WS Server] Client connected: ${ws.userId}`);

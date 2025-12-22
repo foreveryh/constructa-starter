@@ -85,6 +85,13 @@
       "when": 1766268066951,
       "tag": "0011_blue_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1766390267683,
+      "tag": "0012_curvy_bloodscream",
+      "breakpoints": true
     }
   ]
 }
