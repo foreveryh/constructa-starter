@@ -11,6 +11,7 @@
  */
 
 import type { ChatModelAdapter, ChatModelRunOptions, ChatModelRunResult } from '@assistant-ui/react';
+import { notifyMessagesLoaded, type SDKMessage as StorageSDKMessage } from './chat-session-store';
 
 // SDK Message Types (matching what WebSocket server sends)
 type SDKContentBlock =
@@ -19,6 +20,7 @@ type SDKContentBlock =
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; tool_use_id: string; content: unknown };
 
+// Local SDKMessage type for this adapter (content is always an array from streaming)
 type SDKMessage = {
   type: 'system' | 'assistant' | 'user' | 'result' | 'error';
   subtype?: string;
@@ -42,6 +44,7 @@ type InboundMessage =
 type OutboundMessage =
   | { type: 'session_init'; sessionId: string }
   | { type: 'message'; event: SDKMessage }
+  | { type: 'messages_loaded'; messages: StorageSDKMessage[] }
   | { type: 'error'; code: string; message: string; retriable: boolean }
   | { type: 'done' }
   | { type: 'pong' };
@@ -76,9 +79,31 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 1000;
 
+// Track if a query is currently running (set when chat message sent, cleared on done/error)
+let isQueryRunning = false;
+
+// Track pending chat request at WebSocket level (more reliable than generator state)
+let hasPendingChat = false;
+
 // Message queue for handling responses
 type MessageHandler = (msg: OutboundMessage) => void;
 let messageHandler: MessageHandler | null = null;
+
+// Session init callback for notifying route when session changes
+let sessionInitCallback: ((sessionId: string) => void) | null = null;
+
+export function onSessionInit(callback: (sessionId: string) => void): () => void {
+  sessionInitCallback = callback;
+  return () => {
+    sessionInitCallback = null;
+  };
+}
+
+function notifySessionInit(sessionId: string): void {
+  if (sessionInitCallback) {
+    sessionInitCallback(sessionId);
+  }
+}
 
 export function getSessionId(): string | undefined {
   return currentSessionId;
@@ -93,14 +118,26 @@ export function clearSession(): void {
 }
 
 /**
+ * Check if a query is currently running
+ * Uses multiple indicators for reliability:
+ * - hasPendingChat flag (set when chat message sent via WebSocket)
+ * - isQueryRunning flag (set at start of run())
+ * - messageHandler existence (set during active message processing)
+ */
+export function checkIsQueryRunning(): boolean {
+  const running = hasPendingChat || isQueryRunning || messageHandler !== null;
+  console.log('[WS Adapter] checkIsQueryRunning:', running, { hasPendingChat, isQueryRunning, hasMessageHandler: messageHandler !== null });
+  return running;
+}
+
+/**
  * Get WebSocket URL
  * In development, connects to the same host on /ws/agent
  * In production, can be configured via VITE_WS_URL environment variable
  */
 function getWebSocketUrl(): string {
   // Check for explicit WebSocket URL (e.g., for sidecar deployment)
-  // @ts-expect-error - Vite injects this at build time
-  const configuredUrl = import.meta.env?.VITE_WS_URL;
+  const configuredUrl = (import.meta.env?.VITE_WS_URL as string | undefined);
   if (configuredUrl) {
     return configuredUrl;
   }
@@ -165,6 +202,14 @@ function getWebSocket(): Promise<WebSocket> {
         if (msg.type === 'session_init') {
           currentSessionId = msg.sessionId;
           console.log('[WS Adapter] Session initialized:', msg.sessionId);
+          // Notify route about session change so it can update its state
+          notifySessionInit(msg.sessionId);
+        }
+
+        // Handle messages loaded (historical messages for resume)
+        if (msg.type === 'messages_loaded') {
+          console.log('[WS Adapter] Received', msg.messages.length, 'historical messages');
+          notifyMessagesLoaded(msg.messages);
         }
 
         // Forward to current handler
@@ -196,6 +241,25 @@ export async function abort(): Promise<void> {
 }
 
 /**
+ * Resume a previous session
+ * Sends resume message to server and updates current session ID
+ */
+export async function resumeSession(sessionId: string): Promise<void> {
+  console.log('[WS Adapter] Resuming session:', sessionId);
+  currentSessionId = sessionId;
+  await send({ type: 'resume', sessionId });
+}
+
+/**
+ * Start a new session
+ * Clears the current session ID so next message creates a new session
+ */
+export function newSession(): void {
+  console.log('[WS Adapter] Starting new session');
+  currentSessionId = undefined;
+}
+
+/**
  * Close WebSocket connection
  */
 export function disconnect(): void {
@@ -210,6 +274,11 @@ export function disconnect(): void {
  */
 export const ClaudeAgentWSAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }: ChatModelRunOptions) {
+    console.log('[WS Adapter] run() called with', messages.length, 'messages');
+
+    // Mark query as running
+    isQueryRunning = true;
+
     // 1. Extract the latest user message
     const lastMessage = messages.at(-1);
     if (!lastMessage || lastMessage.role !== 'user') {
@@ -247,12 +316,18 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
     // 4. Send chat message
     try {
+      console.log('[WS Adapter] Sending chat message:', { type: 'chat', content: prompt.substring(0, 50), sessionId: currentSessionId });
+      // Set pending flag BEFORE sending so switch detection works immediately
+      hasPendingChat = true;
       await send({
         type: 'chat',
         content: prompt,
         sessionId: currentSessionId,
       });
+      console.log('[WS Adapter] Message sent successfully');
     } catch (connectError) {
+      hasPendingChat = false;
+      console.error('[WS Adapter] Failed to send message:', connectError);
       throw new Error('Failed to connect to WebSocket server');
     }
 
@@ -282,9 +357,8 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
             switch (event.type) {
               case 'system':
-                if (event.subtype === 'init' && event.session_id) {
-                  currentSessionId = event.session_id;
-                }
+                // Note: We don't update currentSessionId here because we use
+                // our workspaceSessionId (from session_init), not the SDK's session_id
                 break;
 
               case 'assistant':
@@ -397,6 +471,8 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
     } finally {
       abortSignal?.removeEventListener('abort', abortHandler);
       messageHandler = null;
+      isQueryRunning = false;
+      hasPendingChat = false;
     }
 
     // 6. Yield final result

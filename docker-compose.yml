@@ -1,6 +1,14 @@
-version: '3.9'
+# x-app-image for remote registry (CI/CD deployment)
+x-app-image: &app_image '${APP_IMAGE:-claude-agent-chat}:${APP_TAG:-latest}'
 
-x-app-image: &app_image '${APP_IMAGE:-ghcr.io/your-org/your-repo/app}:${APP_TAG:-latest}'
+# x-app-build for local development
+x-app-build: &app_build
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      # WebSocket URL for sidecar deployment (port 3001 inside container, mapped to 3051)
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3051/ws/agent}
 
 services:
   db:
@@ -83,7 +91,7 @@ services:
 
   # migrations run before app starts, re-created for each new image tag
   migrate:
-    image: *app_image
+    <<: *app_build
     depends_on:
       db:
         condition: service_healthy
@@ -116,7 +124,7 @@ services:
 
   # Background workers for BullMQ (cron + indexing, etc.)
   worker:
-    image: *app_image
+    <<: *app_build
     container_name: ex0-worker
     depends_on:
       db:
@@ -138,25 +146,26 @@ services:
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?}
       S3_BUCKET: ${MINIO_BUCKET:?}
-      # Job queue + schedules
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # Job queue + schedules (Docker default: redis container)
+      REDIS_URL: redis://redis:6379
       BULLMQ_PREFIX: ${BULLMQ_PREFIX:-constructa}
       DAILY_CREDIT_REFILL_CRON: ${DAILY_CREDIT_REFILL_CRON:-0 3 * * *}
       JOB_DAILY_CREDIT_REFILL_URL: ${JOB_DAILY_CREDIT_REFILL_URL:-http://app:3000/api/jobs/daily-credit-refill}
       JOBS_SECRET: ${JOBS_SECRET:-}
-      # Search
-      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+      # Search (Docker default: meilisearch container)
+      MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
       SEARCH_REINDEX_ON_BOOT: ${SEARCH_REINDEX_ON_BOOT:-false}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
-    command: ['node', '--import', 'tsx/loader', 'src/worker/index.ts']
+    command: ['npx', 'tsx', 'src/worker/index.ts']
     restart: unless-stopped
     profiles: ['dev', 'selfhost', 'prod']
 
   # App container (useful for self-host/preview via reverse proxy; in dev run pnpm dev)
   app:
-    image: *app_image
+    <<: *app_build
+    container_name: ex0-app
     depends_on:
       db:
         condition: service_healthy
@@ -181,10 +190,24 @@ services:
       S3_BUCKET: ${MINIO_BUCKET:?}
       # Email (dev uses mailhog: host=mailhog, port=1025)
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-mailhog}
-      # Redis + Meili for app features
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+      # Redis + Meili for app features (Docker defaults: container names)
+      REDIS_URL: redis://redis:6379
+      MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
+      # Authentication (Docker port mapping: 5050:5000)
+      BETTER_AUTH_URL: http://localhost:5050
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
+      # Claude Agent SDK configuration
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      CLAUDE_SESSIONS_ROOT: /data/users
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
+    volumes:
+      - claude-sessions:/data/users
+    ports:
+      - '5050:5000'
+      - '3051:3001'
     profiles: ['selfhost', 'prod']
 
 volumes:
@@ -192,3 +215,4 @@ volumes:
   ex0-minio-data:
   ex0-redis-data:
   ex0-meili-data:
+  claude-sessions:  # Claude Agent session storage (persists across container restarts)

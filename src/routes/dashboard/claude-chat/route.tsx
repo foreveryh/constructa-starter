@@ -29,16 +29,139 @@ import {
 import { AuthLoading, RedirectToSignIn, SignedIn } from '@daveyplate/better-auth-ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useEffect, useState, type FC } from 'react';
+import { useEffect, useState, useCallback, type FC } from 'react';
 import { MarkdownText } from '~/components/assistant-ui/markdown-text';
+import { SessionList } from '~/components/claude-chat/session-list';
 // Use WebSocket adapter for more reliable real-time communication
-import { ClaudeAgentWSAdapter } from '~/lib/claude-agent-ws-adapter';
+import {
+  ClaudeAgentWSAdapter,
+  getSessionId,
+  resumeSession,
+  newSession,
+  onSessionInit,
+  checkIsQueryRunning,
+  abort,
+} from '~/lib/claude-agent-ws-adapter';
+import { useChatSessionStore, onMessagesLoaded, type SDKMessage, type ThreadMessage, type TextContentPart } from '~/lib/chat-session-store';
 
 export const Route = createFileRoute('/dashboard/claude-chat')({
   component: RouteComponent,
 });
 
 function RouteComponent() {
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // Key to force re-mount of chat surface when session changes
+  const [chatKey, setChatKey] = useState(0);
+  // Pending session switch confirmation
+  const [pendingSessionSwitch, setPendingSessionSwitch] = useState<{
+    targetSessionId: string | null;
+    isNewSession: boolean;
+  } | null>(null);
+
+  const { loadHistoricalMessages, clearMessages, setSessionId } = useChatSessionStore();
+
+  // Listen for messages loaded events from WebSocket
+  // Note: We do NOT increment chatKey here because that would cause
+  // the component to remount, which triggers abort on any running query
+  useEffect(() => {
+    const unsubscribe = onMessagesLoaded((messages: SDKMessage[]) => {
+      console.log('[Route] Received messages_loaded callback with', messages.length, 'messages');
+      loadHistoricalMessages(messages);
+      // Historical messages are stored in zustand and rendered separately,
+      // no need to remount the component
+    });
+
+    return unsubscribe;
+  }, [loadHistoricalMessages]);
+
+  // Sync with adapter's session ID on mount
+  useEffect(() => {
+    const sessionId = getSessionId();
+    if (sessionId) {
+      setCurrentSessionId(sessionId);
+      setSessionId(sessionId);
+    }
+  }, [setSessionId]);
+
+  // Listen for session init events to keep route state in sync with adapter
+  useEffect(() => {
+    const unsubscribe = onSessionInit((sessionId: string) => {
+      console.log('[Route] Session initialized, updating state:', sessionId);
+      setCurrentSessionId(sessionId);
+      setSessionId(sessionId);
+    });
+    return unsubscribe;
+  }, [setSessionId]);
+
+  // Perform the actual session switch (after confirmation or if no query running)
+  const performSessionSwitch = useCallback(async (sdkSessionId: string | null, isNewSession: boolean) => {
+    if (isNewSession) {
+      console.log('[Route] Starting new session');
+      setCurrentSessionId(null);
+      setSessionId(null);
+      clearMessages();
+      newSession();
+      setChatKey((k) => k + 1);
+    } else if (sdkSessionId) {
+      console.log('[Route] Selecting session:', sdkSessionId);
+      setCurrentSessionId(sdkSessionId);
+      setSessionId(sdkSessionId);
+      clearMessages();
+      setChatKey((k) => k + 1);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await resumeSession(sdkSessionId);
+    }
+  }, [setSessionId, clearMessages]);
+
+  const handleSelectSession = useCallback(async (sdkSessionId: string) => {
+    // Check both route state and adapter state for current session
+    // This prevents abort during active query when user clicks on current session
+    const adapterSessionId = getSessionId();
+    if (sdkSessionId === currentSessionId || sdkSessionId === adapterSessionId) {
+      console.log('[Route] Session already active, skipping:', sdkSessionId);
+      return;
+    }
+
+    // Check if a query is currently running
+    if (checkIsQueryRunning()) {
+      console.log('[Route] Query running, showing confirmation dialog');
+      setPendingSessionSwitch({ targetSessionId: sdkSessionId, isNewSession: false });
+      return;
+    }
+
+    await performSessionSwitch(sdkSessionId, false);
+  }, [currentSessionId, performSessionSwitch]);
+
+  const handleNewSession = useCallback(() => {
+    // Check if a query is currently running
+    if (checkIsQueryRunning()) {
+      console.log('[Route] Query running, showing confirmation dialog for new session');
+      setPendingSessionSwitch({ targetSessionId: null, isNewSession: true });
+      return;
+    }
+
+    performSessionSwitch(null, true);
+  }, [performSessionSwitch]);
+
+  // Handle confirmation dialog actions
+  const handleConfirmSwitch = useCallback(async () => {
+    if (!pendingSessionSwitch) return;
+
+    console.log('[Route] User confirmed session switch, aborting current query');
+    // Abort the current query
+    await abort();
+    // Small delay to allow abort to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Perform the switch
+    await performSessionSwitch(pendingSessionSwitch.targetSessionId, pendingSessionSwitch.isNewSession);
+    setPendingSessionSwitch(null);
+  }, [pendingSessionSwitch, performSessionSwitch]);
+
+  const handleCancelSwitch = useCallback(() => {
+    console.log('[Route] User cancelled session switch');
+    setPendingSessionSwitch(null);
+  }, []);
+
   return (
     <div className="h-full">
       <AuthLoading>
@@ -50,7 +173,44 @@ function RouteComponent() {
       <RedirectToSignIn />
 
       <SignedIn>
-        <ClaudeChatSurface />
+        <div className="flex h-full">
+          {/* Left sidebar: Session list */}
+          <div className="w-64 shrink-0 border-r border-[#00000015] bg-[#EDEADF] dark:border-[#6c6a6040] dark:bg-[#252420]">
+            <SessionList
+              currentSessionId={currentSessionId}
+              onSelectSession={handleSelectSession}
+              onNewSession={handleNewSession}
+            />
+          </div>
+
+          {/* Right: Chat area */}
+          <div className="flex-1">
+            <ClaudeChatSurface key={chatKey} />
+          </div>
+        </div>
+
+        {/* Session Switch Blocked Dialog - shown when query is running */}
+        {pendingSessionSwitch && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="mx-4 max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-[#2b2a27]">
+              <h3 className="mb-3 text-lg font-semibold text-[#1a1a18] dark:text-[#eee]">
+                请稍候
+              </h3>
+              <p className="mb-6 text-[#6b6a68] dark:text-[#9a9893]">
+                当前会话正在接收回复，请等待回复完成后再切换会话。
+              </p>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCancelSwitch}
+                  className="rounded-lg bg-[#ae5630] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#c4633a]"
+                >
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </SignedIn>
     </div>
   );
@@ -58,22 +218,34 @@ function RouteComponent() {
 
 function ClaudeChatSurface() {
   const runtime = useLocalRuntime(ClaudeAgentWSAdapter);
+  const historicalMessages = useChatSessionStore((state) => state.messages);
+  const hasHistoricalMessages = historicalMessages.length > 0;
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
         <ThreadPrimitive.Viewport className="flex grow flex-col overflow-y-scroll">
-          <ThreadPrimitive.Empty>
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-              <div className="text-4xl font-semibold text-[#1a1a18] dark:text-[#eee]">
-                Claude Agent
+          {/* Show empty state only when no historical messages */}
+          {!hasHistoricalMessages && (
+            <ThreadPrimitive.Empty>
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                <div className="text-4xl font-semibold text-[#1a1a18] dark:text-[#eee]">
+                  Claude Agent
+                </div>
+                <p className="max-w-md text-[#6b6a68] dark:text-[#9a9893]">
+                  Powered by Claude Agent SDK. I can read files, execute code, and help with various
+                  tasks.
+                </p>
               </div>
-              <p className="max-w-md text-[#6b6a68] dark:text-[#9a9893]">
-                Powered by Claude Agent SDK. I can read files, execute code, and help with various
-                tasks.
-              </p>
-            </div>
-          </ThreadPrimitive.Empty>
+            </ThreadPrimitive.Empty>
+          )}
+
+          {/* Render historical messages from store */}
+          {historicalMessages.map((msg) => (
+            <HistoricalMessage key={msg.id} message={msg} />
+          ))}
+
+          {/* Render live messages from runtime */}
           <ThreadPrimitive.Messages components={{ Message: ChatMessage }} />
           <div aria-hidden="true" className="h-4" />
         </ThreadPrimitive.Viewport>
@@ -225,6 +397,62 @@ const ChatMessage: FC = () => {
           </div>
         </div>
       </MessagePrimitive.Root>
+    );
+  }
+
+  return null;
+};
+
+/**
+ * Historical Message Component
+ * Renders messages loaded from JSONL history files
+ */
+const HistoricalMessage: FC<{ message: ThreadMessage }> = ({ message }) => {
+  const isUser = message.role === 'user';
+  const isAssistant = message.role === 'assistant';
+
+  // Get text content
+  const textContent = message.content
+    .filter((p): p is TextContentPart => p.type === 'text')
+    .map((p) => p.text)
+    .join('\n');
+
+  if (isUser) {
+    return (
+      <div className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
+        <div className="group/user wrap-break-word relative inline-flex max-w-[75ch] flex-col gap-2 rounded-xl bg-[#DDD9CE] py-2.5 pr-6 pl-2.5 text-[#1a1a18] transition-all dark:bg-[#393937] dark:text-[#eee]">
+          <div className="relative flex flex-row gap-2">
+            <div className="shrink-0 self-start transition-all duration-300">
+              <Avatar.Root className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full bg-[#1a1a18] font-bold text-[12px] text-white dark:bg-[#eee] dark:text-[#2b2a27]">
+                <Avatar.AvatarFallback>U</Avatar.AvatarFallback>
+              </Avatar.Root>
+            </div>
+            <div className="flex-1">
+              <div className="relative grid grid-cols-1 gap-2 py-0.5">
+                <div className="wrap-break-word whitespace-pre-wrap">
+                  {textContent}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAssistant) {
+    return (
+      <div className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
+        <div className="relative mb-12 font-serif">
+          <div className="relative leading-[1.65rem]">
+            <div className="grid grid-cols-1 gap-2.5">
+              <div className="wrap-break-word whitespace-normal pr-8 pl-2 font-serif text-[#1a1a18] dark:text-[#eee]">
+                {textContent}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
