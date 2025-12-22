@@ -49,6 +49,24 @@ export function SessionList({
 
   const sessions = data?.sessions ?? [];
 
+  // Handle title update
+  const handleUpdateTitle = async (id: string, title: string) => {
+    try {
+      const res = await fetch(`/api/agent-sessions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update title');
+      }
+      // Invalidate cache to refresh list
+      queryClient.invalidateQueries({ queryKey: ['agent-sessions'] });
+    } catch (error) {
+      console.error('Failed to update session title:', error);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* Header with New Chat button */}
@@ -96,6 +114,7 @@ export function SessionList({
                 session={session}
                 isActive={session.sdkSessionId === currentSessionId}
                 onClick={() => onSelectSession(session.sdkSessionId)}
+                onUpdateTitle={handleUpdateTitle}
               />
             ))}
           </div>

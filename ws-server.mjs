@@ -58,10 +58,11 @@ const sessionMapping = new Map();
  * Persist session to database via API
  * @param {string} cookie - User's auth cookie
  * @param {string} workspaceSessionId - Our workspace session ID (used as sdkSessionId in DB)
- * @param {string} realSdkSessionId - The actual SDK's session ID (stored in title for now)
+ * @param {string} realSdkSessionId - The actual SDK's session ID
  * @param {string} claudeHomePath - Path to CLAUDE_HOME
+ * @param {string} [title] - Optional session title (extracted from first user message)
  */
-async function persistSession(cookie, workspaceSessionId, realSdkSessionId, claudeHomePath) {
+async function persistSession(cookie, workspaceSessionId, realSdkSessionId, claudeHomePath, title) {
   try {
     const response = await fetch(`${APP_URL}/api/agent-sessions`, {
       method: 'POST',
@@ -72,9 +73,9 @@ async function persistSession(cookie, workspaceSessionId, realSdkSessionId, clau
       body: JSON.stringify({
         sdkSessionId: workspaceSessionId,
         claudeHomePath,
-        // Store the real SDK session ID in a way we can retrieve it
-        // Using title temporarily until we add a proper column
         realSdkSessionId,
+        // Use first user message as title (truncated to 50 chars)
+        ...(title && { title }),
       }),
     });
 
@@ -359,8 +360,10 @@ async function handleChat(ws, prompt, resumeSessionId) {
     worker.stdin.write(request);
     worker.stdin.end();
 
-    // Track our workspace session ID
+    // Track our workspace session ID and first prompt (for title generation)
     ws.workspaceSessionId = workspaceSessionId;
+    // Only set sessionTitle for new sessions (not resume)
+    const sessionTitle = resumeSessionId ? null : prompt.slice(0, 50).trim();
 
     // Read responses line by line
     const rl = createInterface({ input: worker.stdout });
@@ -388,7 +391,8 @@ async function handleChat(ws, prompt, resumeSessionId) {
             console.log(`[WS Server] Session mapping: ${ws.workspaceSessionId} -> ${event.session_id}`);
 
             // Persist session to database (use workspaceSessionId as the identifier)
-            persistSession(ws.cookie, ws.workspaceSessionId, event.session_id, claudeHome);
+            // Pass sessionTitle only for new sessions (extracted from first user message)
+            persistSession(ws.cookie, ws.workspaceSessionId, event.session_id, claudeHome, sessionTitle);
 
             // Send our workspace sessionId to client (they'll use this for resume)
             sendMessage(ws, {

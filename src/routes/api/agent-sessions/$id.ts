@@ -45,19 +45,20 @@ export const Route = createFileRoute('/api/agent-sessions/$id')({
         const body = await request.json();
 
         // Build update object with only provided fields
+        // Note: Only update updatedAt for non-title changes (e.g., favorite)
+        // Title changes should not affect the conversation timestamp
         const updateData: Partial<{
           title: string;
           favorite: boolean;
           updatedAt: Date;
-        }> = {
-          updatedAt: new Date(),
-        };
+        }> = {};
 
         if (typeof body.title === 'string') {
           updateData.title = body.title;
         }
         if (typeof body.favorite === 'boolean') {
           updateData.favorite = body.favorite;
+          updateData.updatedAt = new Date(); // Only update timestamp for favorite changes
         }
 
         const [updated] = await db
