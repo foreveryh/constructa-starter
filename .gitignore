@@ -46,7 +46,7 @@ infra/hetzner/terraform.tfstate.*
 /.cursor/rules/ruler_cursor_instructions.mdc.bak
 /AGENTS.md
 /AGENTS.md.bak
-/CLAUDE.md
+# /CLAUDE.md - Keep tracked for project rules
 /CLAUDE.md.bak
 /src/.codex/config.toml
 /src/.codex/config.toml.bak
