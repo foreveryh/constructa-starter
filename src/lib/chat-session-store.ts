@@ -15,12 +15,29 @@ export type TextContentPart = {
   readonly text: string;
 };
 
+export type ReasoningContentPart = {
+  readonly type: 'reasoning';
+  readonly text: string;
+};
+
+export type ToolCallContentPart = {
+  readonly type: 'tool-call';
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly args: Record<string, unknown>;
+  readonly argsText: string;
+  readonly result?: unknown;
+  readonly isError?: boolean;
+};
+
+export type ContentPart = TextContentPart | ReasoningContentPart | ToolCallContentPart;
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface ThreadMessage {
   id: string;
   role: MessageRole;
-  content: TextContentPart[];
+  content: ContentPart[];
   createdAt?: Date;
   status?: {
     type: 'complete' | 'running' | 'requires-action' | 'incomplete';
@@ -63,7 +80,7 @@ interface ChatSessionState {
   setSessionId: (sessionId: string | null) => void;
   setMessages: (messages: ThreadMessage[]) => void;
   addMessage: (message: ThreadMessage) => void;
-  updateLastMessage: (content: TextContentPart[]) => void;
+  updateLastMessage: (content: ContentPart[]) => void;
   setIsRunning: (isRunning: boolean) => void;
   clearMessages: () => void;
 
@@ -127,13 +144,43 @@ function convertSDKMessage(sdkMessage: SDKMessage): ThreadMessage | null {
     const content = message.content;
     if (!Array.isArray(content)) return null;
 
-    const parts: TextContentPart[] = [];
+    const parts: ContentPart[] = [];
+    // Track tool calls to merge with results
+    const toolCalls = new Map<string, ToolCallContentPart>();
 
     for (const block of content) {
       if (block.type === 'text' && block.text) {
         parts.push({ type: 'text', text: block.text });
+      } else if (block.type === 'thinking' && block.thinking) {
+        parts.push({ type: 'reasoning', text: block.thinking });
+      } else if (block.type === 'tool_use') {
+        const toolPart: ToolCallContentPart = {
+          type: 'tool-call',
+          toolCallId: block.id,
+          toolName: block.name,
+          args: block.input as Record<string, unknown>,
+          argsText: JSON.stringify(block.input, null, 2),
+        };
+        toolCalls.set(block.id, toolPart);
+        parts.push(toolPart);
+      } else if (block.type === 'tool_result' && block.tool_use_id) {
+        // Update the corresponding tool call with its result
+        const existingTool = toolCalls.get(block.tool_use_id);
+        if (existingTool) {
+          const updatedPart: ToolCallContentPart = {
+            ...existingTool,
+            result: block.content,
+          };
+          toolCalls.set(block.tool_use_id, updatedPart);
+          // Update in parts array
+          const idx = parts.findIndex(
+            (p) => p.type === 'tool-call' && p.toolCallId === block.tool_use_id
+          );
+          if (idx !== -1) {
+            parts[idx] = updatedPart;
+          }
+        }
       }
-      // Could add support for thinking/tool_use here if needed
     }
 
     if (parts.length === 0) return null;

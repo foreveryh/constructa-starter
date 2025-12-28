@@ -32,6 +32,8 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useState, useCallback, type FC } from 'react';
 import { MarkdownText } from '~/components/assistant-ui/markdown-text';
 import { SessionList } from '~/components/claude-chat/session-list';
+import { ReasoningPart } from '~/components/agent-chat/reasoning-part';
+import { ToolCallPart } from '~/components/agent-chat/tool-call-part';
 // Use WebSocket adapter for more reliable real-time communication
 import {
   ClaudeAgentWSAdapter,
@@ -42,7 +44,16 @@ import {
   checkIsQueryRunning,
   abort,
 } from '~/lib/claude-agent-ws-adapter';
-import { useChatSessionStore, onMessagesLoaded, type SDKMessage, type ThreadMessage, type TextContentPart } from '~/lib/chat-session-store';
+import {
+  useChatSessionStore,
+  onMessagesLoaded,
+  type SDKMessage,
+  type ThreadMessage,
+  type TextContentPart,
+  type ReasoningContentPart,
+  type ToolCallContentPart,
+  type ContentPart,
+} from '~/lib/chat-session-store';
 
 export const Route = createFileRoute('/dashboard/claude-chat')({
   component: RouteComponent,
@@ -364,7 +375,12 @@ const ChatMessage: FC = () => {
           <div className="relative leading-[1.65rem]">
             <div className="grid grid-cols-1 gap-2.5">
               <div className="wrap-break-word whitespace-normal pr-8 pl-2 font-serif text-[#1a1a18] dark:text-[#eee]">
-                <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+                <MessagePrimitive.Parts
+                  components={{
+                    Text: MarkdownText,
+                    Reasoning: ReasoningPart,
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -411,7 +427,7 @@ const HistoricalMessage: FC<{ message: ThreadMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
-  // Get text content
+  // Get text content for user messages
   const textContent = message.content
     .filter((p): p is TextContentPart => p.type === 'text')
     .map((p) => p.text)
@@ -447,7 +463,37 @@ const HistoricalMessage: FC<{ message: ThreadMessage }> = ({ message }) => {
           <div className="relative leading-[1.65rem]">
             <div className="grid grid-cols-1 gap-2.5">
               <div className="wrap-break-word whitespace-normal pr-8 pl-2 font-serif text-[#1a1a18] dark:text-[#eee]">
-                {textContent}
+                {message.content.map((part, index) => {
+                  if (part.type === 'text') {
+                    return (
+                      <div key={index} className="whitespace-pre-wrap">
+                        {part.text}
+                      </div>
+                    );
+                  }
+                  if (part.type === 'reasoning') {
+                    return (
+                      <ReasoningPart
+                        key={index}
+                        text={part.text}
+                      />
+                    );
+                  }
+                  if (part.type === 'tool-call') {
+                    return (
+                      <ToolCallPart
+                        key={index}
+                        toolCallId={part.toolCallId}
+                        toolName={part.toolName}
+                        args={part.args}
+                        argsText={part.argsText}
+                        result={part.result}
+                        isError={part.isError}
+                      />
+                    );
+                  }
+                  return null;
+                })}
               </div>
             </div>
           </div>
