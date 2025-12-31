@@ -18,9 +18,11 @@ import {
 import * as Avatar from '@radix-ui/react-avatar';
 import {
   ArrowUpIcon,
+  BarChartIcon,
   ChevronDownIcon,
   ClipboardIcon,
   Cross2Icon,
+  InfoCircledIcon,
   MixerHorizontalIcon,
   Pencil1Icon,
   PlusIcon,
@@ -32,6 +34,8 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useState, useCallback, type FC } from 'react';
 import { MarkdownText } from '~/components/assistant-ui/markdown-text';
 import { SessionList } from '~/components/claude-chat/session-list';
+import { UsageCard } from '~/components/claude-chat/usage-card';
+import { SessionInfoPanel } from '~/components/claude-chat/session-info-panel';
 import { ReasoningPart } from '~/components/agent-chat/reasoning-part';
 import { ToolCallPart } from '~/components/agent-chat/tool-call-part';
 // Use WebSocket adapter for more reliable real-time communication
@@ -232,6 +236,10 @@ function ClaudeChatSurface() {
   const historicalMessages = useChatSessionStore((state) => state.messages);
   const hasHistoricalMessages = historicalMessages.length > 0;
 
+  // Session info panel state
+  const [showSessionInfo, setShowSessionInfo] = useState(false);
+  const sessionMetadata = useChatSessionStore((state) => state.sessionMetadata);
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
@@ -298,6 +306,28 @@ function ClaudeChatSurface() {
                 <span className="font-serif text-[14px]">GLM 4.6</span>
                 <ChevronDownIcon width={20} height={20} className="opacity-75" />
               </button>
+
+              {/* Session Info Button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowSessionInfo(!showSessionInfo)}
+                  className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee] disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="查看会话信息"
+                  disabled={!sessionMetadata}
+                >
+                  <InfoCircledIcon width={16} height={16} />
+                </button>
+
+                {/* Session Info Panel */}
+                {showSessionInfo && sessionMetadata && (
+                  <SessionInfoPanel
+                    data={sessionMetadata}
+                    onClose={() => setShowSessionInfo(false)}
+                  />
+                )}
+              </div>
+
               <ComposerPrimitive.Send className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ae5630] transition-colors hover:bg-[#c4633a] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:bg-[#ae5630] dark:hover:bg-[#c4633a]">
                 <ArrowUpIcon width={16} height={16} className="text-white" />
               </ComposerPrimitive.Send>
@@ -321,6 +351,111 @@ const ComposerAttachmentsSection: FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+/**
+ * Assistant Message Component - with manual part rendering
+ * Manually renders all content parts to support custom tool-call type
+ */
+const AssistantMessage: FC<{ isLast: boolean }> = ({ isLast }) => {
+  // Get message using the hook to access runtime context
+  const message = useMessage();
+
+  // Access content parts - cast to our ContentPart type
+  const messageContent = (message as any).content as ContentPart[] | undefined;
+
+  // State for showing usage card
+  const [showUsageCard, setShowUsageCard] = useState(false);
+
+  // Get usage data from store (only show for last message)
+  const usageData = useChatSessionStore((state) => state.usageData);
+
+  return (
+    <MessagePrimitive.Root className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
+      <div className="relative mb-12 font-serif">
+        <div className="relative leading-[1.65rem]">
+          <div className="grid grid-cols-1 gap-2.5">
+            <div className="wrap-break-word whitespace-normal pr-8 pl-2 font-serif text-[#1a1a18] dark:text-[#eee]">
+              {/* Manual rendering to support custom tool-call type */}
+              {messageContent?.map((part, index) => {
+                if (part.type === 'text') {
+                  return (
+                    <div key={index} className="whitespace-pre-wrap">
+                      {part.text}
+                    </div>
+                  );
+                }
+                if (part.type === 'reasoning') {
+                  return (
+                    <ReasoningPart
+                      key={index}
+                      text={part.text}
+                    />
+                  );
+                }
+                if (part.type === 'tool-call') {
+                  return (
+                    <ToolCallPart
+                      key={index}
+                      toolCallId={part.toolCallId}
+                      toolName={part.toolName}
+                      args={part.args}
+                      argsText={part.argsText}
+                      result={part.result}
+                      isError={part.isError}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0">
+          <ActionBarPrimitive.Root
+            hideWhenRunning
+            autohide="not-last"
+            className="pointer-events-auto flex w-full translate-y-full flex-col items-end px-2 pt-2 transition"
+          >
+            <div className="relative flex items-center text-[#6b6a68] dark:text-[#9a9893]">
+              <ActionBarPrimitive.Copy className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
+                <ClipboardIcon width={20} height={20} />
+              </ActionBarPrimitive.Copy>
+              <ActionBarPrimitive.FeedbackPositive className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
+                <ThumbsUp width={16} height={16} />
+              </ActionBarPrimitive.FeedbackPositive>
+              <ActionBarPrimitive.FeedbackNegative className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
+                <ThumbsDown width={16} height={16} />
+              </ActionBarPrimitive.FeedbackNegative>
+              <ActionBarPrimitive.Reload className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
+                <ReloadIcon width={20} height={20} />
+              </ActionBarPrimitive.Reload>
+              {/* Statistics button - only show for last message with usage data */}
+              {isLast && usageData && (
+                <button
+                  type="button"
+                  onClick={() => setShowUsageCard(!showUsageCard)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95"
+                  aria-label="查看统计信息"
+                >
+                  <BarChartIcon width={20} height={20} />
+                </button>
+              )}
+              {/* Usage Card - shown when statistics button is clicked */}
+              {isLast && showUsageCard && usageData && (
+                <UsageCard data={usageData} onClose={() => setShowUsageCard(false)} />
+              )}
+            </div>
+            {isLast && (
+              <p className="mt-2 w-full text-right text-[#8a8985] text-[0.65rem] leading-[0.85rem] opacity-90 sm:text-[0.75rem] dark:text-[#b8b5a9]">
+                Claude can make mistakes. Please double-check responses.
+              </p>
+            )}
+          </ActionBarPrimitive.Root>
+        </div>
+      </div>
+    </MessagePrimitive.Root>
   );
 };
 
@@ -369,51 +504,7 @@ const ChatMessage: FC = () => {
   }
 
   if (isAssistant) {
-    return (
-      <MessagePrimitive.Root className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
-        <div className="relative mb-12 font-serif">
-          <div className="relative leading-[1.65rem]">
-            <div className="grid grid-cols-1 gap-2.5">
-              <div className="wrap-break-word whitespace-normal pr-8 pl-2 font-serif text-[#1a1a18] dark:text-[#eee]">
-                <MessagePrimitive.Parts
-                  components={{
-                    Text: MarkdownText,
-                    Reasoning: ReasoningPart,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0">
-            <ActionBarPrimitive.Root
-              hideWhenRunning
-              autohide="not-last"
-              className="pointer-events-auto flex w-full translate-y-full flex-col items-end px-2 pt-2 transition"
-            >
-              <div className="flex items-center text-[#6b6a68] dark:text-[#9a9893]">
-                <ActionBarPrimitive.Copy className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
-                  <ClipboardIcon width={20} height={20} />
-                </ActionBarPrimitive.Copy>
-                <ActionBarPrimitive.FeedbackPositive className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
-                  <ThumbsUp width={16} height={16} />
-                </ActionBarPrimitive.FeedbackPositive>
-                <ActionBarPrimitive.FeedbackNegative className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
-                  <ThumbsDown width={16} height={16} />
-                </ActionBarPrimitive.FeedbackNegative>
-                <ActionBarPrimitive.Reload className="flex h-8 w-8 items-center justify-center rounded-md transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-transparent active:scale-95">
-                  <ReloadIcon width={20} height={20} />
-                </ActionBarPrimitive.Reload>
-              </div>
-              {isLast && (
-                <p className="mt-2 w-full text-right text-[#8a8985] text-[0.65rem] leading-[0.85rem] opacity-90 sm:text-[0.75rem] dark:text-[#b8b5a9]">
-                  Claude can make mistakes. Please double-check responses.
-                </p>
-              )}
-            </ActionBarPrimitive.Root>
-          </div>
-        </div>
-      </MessagePrimitive.Root>
-    );
+    return <AssistantMessage isLast={isLast} />;
   }
 
   return null;
