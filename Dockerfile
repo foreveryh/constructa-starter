@@ -23,6 +23,8 @@ RUN pnpm install --frozen-lockfile
 # Copy source and build
 COPY . .
 ENV NODE_ENV=production
+# Set CLAUDE_SESSIONS_ROOT at build time so Nitro knows about it
+ENV CLAUDE_SESSIONS_ROOT=/data/users
 RUN pnpm run build
 
 # ---- Stage 2: Runtime --------------------------------------------------------
