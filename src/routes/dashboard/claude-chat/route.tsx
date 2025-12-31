@@ -36,8 +36,12 @@ import { MarkdownText } from '~/components/assistant-ui/markdown-text';
 import { SessionList } from '~/components/claude-chat/session-list';
 import { UsageCard } from '~/components/claude-chat/usage-card';
 import { SessionInfoPanel } from '~/components/claude-chat/session-info-panel';
+import { ArtifactsPanel } from '~/components/claude-chat/artifacts-panel';
+import { ArtifactButton } from '~/components/claude-chat/artifact-button';
 import { ReasoningPart } from '~/components/agent-chat/reasoning-part';
 import { ToolCallPart } from '~/components/agent-chat/tool-call-part';
+import { useArtifactDetection } from '~/lib/hooks/use-artifact-detection';
+import { useArtifactsStore } from '~/lib/stores/artifacts-store';
 // Use WebSocket adapter for more reliable real-time communication
 import {
   ClaudeAgentWSAdapter,
@@ -198,8 +202,8 @@ function RouteComponent() {
             />
           </div>
 
-          {/* Right: Chat area */}
-          <div className="flex-1">
+          {/* Right: Chat area + Artifacts Panel */}
+          <div className="flex-1 flex">
             <ClaudeChatSurface key={chatKey} />
           </div>
         </div>
@@ -240,9 +244,17 @@ function ClaudeChatSurface() {
   const [showSessionInfo, setShowSessionInfo] = useState(false);
   const sessionMetadata = useChatSessionStore((state) => state.sessionMetadata);
 
+  // Artifacts panel state
+  const activeArtifactId = useArtifactsStore((state) => state.activeArtifactId);
+  const setActiveArtifact = useArtifactsStore((state) => state.setActiveArtifact);
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
+      {/* Flex container for chat + artifacts */}
+      <div className="flex h-full">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
         <ThreadPrimitive.Viewport className="flex grow flex-col overflow-y-scroll">
           {/* Show empty state only when no historical messages */}
           {!hasHistoricalMessages && (
@@ -336,6 +348,18 @@ function ClaudeChatSurface() {
           <ComposerAttachmentsSection />
         </ComposerPrimitive.Root>
       </ThreadPrimitive.Root>
+        </div>
+
+        {/* Artifacts Panel */}
+        {activeArtifactId && (
+          <div className="w-1/2 h-full">
+            <ArtifactsPanel
+              artifactId={activeArtifactId}
+              onClose={() => setActiveArtifact(null)}
+            />
+          </div>
+        )}
+      </div>
     </AssistantRuntimeProvider>
   );
 }
@@ -370,6 +394,10 @@ const AssistantMessage: FC<{ isLast: boolean }> = ({ isLast }) => {
 
   // Get usage data from store (only show for last message)
   const usageData = useChatSessionStore((state) => state.usageData);
+
+  // Artifact detection - pass full content array to support both text and tool-call detection
+  const artifact = useArtifactDetection(message.id, messageContent);
+  const setActiveArtifact = useArtifactsStore((state) => state.setActiveArtifact);
 
   return (
     <MessagePrimitive.Root className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
@@ -409,6 +437,16 @@ const AssistantMessage: FC<{ isLast: boolean }> = ({ isLast }) => {
                 }
                 return null;
               })}
+
+              {/* Artifact Button */}
+              {artifact && (
+                <div className="mt-3">
+                  <ArtifactButton
+                    type={artifact.type}
+                    onClick={() => setActiveArtifact(artifact.id)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -524,6 +562,10 @@ const HistoricalMessage: FC<{ message: ThreadMessage }> = ({ message }) => {
     .map((p) => p.text)
     .join('\n');
 
+  // Artifact detection for assistant messages - pass full content array to support both text and tool-call detection
+  const artifact = useArtifactDetection(message.id, isAssistant ? message.content : undefined);
+  const setActiveArtifact = useArtifactsStore((state) => state.setActiveArtifact);
+
   if (isUser) {
     return (
       <div className="group relative mx-auto mt-1 mb-1 block w-full max-w-3xl">
@@ -585,6 +627,16 @@ const HistoricalMessage: FC<{ message: ThreadMessage }> = ({ message }) => {
                   }
                   return null;
                 })}
+
+                {/* Artifact Button */}
+                {artifact && (
+                  <div className="mt-3">
+                    <ArtifactButton
+                      type={artifact.type}
+                      onClick={() => setActiveArtifact(artifact.id)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
