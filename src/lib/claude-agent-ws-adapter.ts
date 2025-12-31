@@ -11,7 +11,8 @@
  */
 
 import type { ChatModelAdapter, ChatModelRunOptions, ChatModelRunResult } from '@assistant-ui/react';
-import { notifyMessagesLoaded, type SDKMessage as StorageSDKMessage } from './chat-session-store';
+import { notifyMessagesLoaded, useChatSessionStore, type SDKMessage as StorageSDKMessage } from './chat-session-store';
+import type { SessionMetadata } from '~/components/claude-chat/session-info-panel';
 
 // SDK Message Types (matching what WebSocket server sends)
 type SDKContentBlock =
@@ -32,6 +33,30 @@ type SDKMessage = {
   result?: string;
   is_error?: boolean;
   error?: string;
+  // Result event fields for usage/cost tracking
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  total_cost_usd?: number;
+  num_turns?: number;
+  duration_ms?: number;
+  modelUsage?: Record<string, {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens?: number;
+    costUSD: number;
+  }>;
+  // System.init event fields for session metadata
+  model?: string;
+  skills?: string[];
+  mcp_servers?: string[];
+  agents?: string[];
+  tools?: string[];
+  slash_commands?: string[];
+  cwd?: string;
 };
 
 // WebSocket message types (matching ws-server.ts)
@@ -42,7 +67,7 @@ type InboundMessage =
   | { type: 'ping' };
 
 type OutboundMessage =
-  | { type: 'session_init'; sessionId: string }
+  | { type: 'session_init'; sessionId: string; userId?: string }
   | { type: 'message'; event: SDKMessage }
   | { type: 'messages_loaded'; messages: StorageSDKMessage[] }
   | { type: 'error'; code: string; message: string; retriable: boolean }
@@ -75,6 +100,7 @@ type ContentPart = TextPart | ReasoningPart | ToolCallPart;
 // WebSocket connection state
 let ws: WebSocket | null = null;
 let currentSessionId: string | undefined;
+let currentUserId: string | undefined;  // Current user ID for Skills isolation
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 1000;
@@ -201,7 +227,12 @@ function getWebSocket(): Promise<WebSocket> {
         // Handle session init
         if (msg.type === 'session_init') {
           currentSessionId = msg.sessionId;
-          console.log('[WS Adapter] Session initialized:', msg.sessionId);
+          if (msg.userId) {
+            currentUserId = msg.userId;
+            console.log('[WS Adapter] Session initialized:', msg.sessionId, 'User:', msg.userId);
+          } else {
+            console.log('[WS Adapter] Session initialized:', msg.sessionId);
+          }
           // Notify route about session change so it can update its state
           notifySessionInit(msg.sessionId);
         }
@@ -335,6 +366,9 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
     const content: ContentPart[] = [];
     const toolCalls = new Map<string, ToolCallPart>();
 
+    // Track accumulated text length for proper streaming
+    let accumulatedTextLength = 0;
+
     try {
       while (!isComplete && !error) {
         // Wait for next message
@@ -357,16 +391,44 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
             switch (event.type) {
               case 'system':
+                // Save session metadata from system.init event
+                if (event.subtype === 'init') {
+                  const metadata: SessionMetadata = {
+                    session_id: event.session_id || currentSessionId || '',
+                    user_id: currentUserId || '',  // Use current user ID for Skills isolation
+                    model: event.model || 'unknown',
+                    skills: event.skills || [],
+                    mcp_servers: event.mcp_servers || [],
+                    agents: event.agents || [],
+                    tools: event.tools || [],
+                    slash_commands: event.slash_commands || [],
+                    cwd: event.cwd || '',
+                  };
+                  useChatSessionStore.getState().setSessionMetadata(metadata);
+                  console.log('[WS Adapter] Saved session metadata:', metadata);
+                }
                 // Note: We don't update currentSessionId here because we use
                 // our workspaceSessionId (from session_init), not the SDK's session_id
                 break;
 
               case 'assistant':
                 if (event.message?.content) {
+                  // Track if we should yield (only if content actually changed)
+                  let shouldYield = false;
+
                   for (const block of event.message.content) {
                     switch (block.type) {
                       case 'text':
                         if (block.text) {
+                          // Check if this is new text content
+                          const newTextLength = block.text.length;
+                          if (newTextLength > accumulatedTextLength) {
+                            // We have new text to add
+                            accumulatedTextLength = newTextLength;
+                            shouldYield = true;
+                          }
+
+                          // Always update the text part with the full accumulated text
                           let existingText = content.find(
                             (p): p is TextPart => p.type === 'text'
                           );
@@ -385,6 +447,7 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
                             type: 'reasoning',
                             text: block.thinking,
                           });
+                          shouldYield = true;
                         }
                         break;
 
@@ -399,15 +462,19 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
                           };
                           toolCalls.set(block.id, toolPart);
                           content.push(toolPart);
+                          shouldYield = true;
                         }
                         break;
                     }
                   }
 
-                  yield {
-                    content: [...content] as ChatModelRunResult['content'],
-                    status: { type: 'running' },
-                  } satisfies ChatModelRunResult;
+                  // Only yield if content actually changed
+                  if (shouldYield) {
+                    yield {
+                      content: [...content] as ChatModelRunResult['content'],
+                      status: { type: 'running' },
+                    } satisfies ChatModelRunResult;
+                  }
                 }
                 break;
 
@@ -444,6 +511,19 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
                 break;
 
               case 'result':
+                // Extract and save usage data if available
+                if (event.usage || event.total_cost_usd) {
+                  const usageData = {
+                    usage: event.usage,
+                    total_cost_usd: event.total_cost_usd,
+                    num_turns: event.num_turns,
+                    duration_ms: event.duration_ms,
+                    modelUsage: event.modelUsage,
+                  };
+                  useChatSessionStore.getState().setUsageData(usageData);
+                  console.log('[WS Adapter] Saved usage data:', usageData);
+                }
+
                 if (event.is_error || event.subtype?.startsWith('error')) {
                   error = new Error(event.result || 'Agent execution failed');
                 }
