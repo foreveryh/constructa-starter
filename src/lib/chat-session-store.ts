@@ -5,9 +5,13 @@
  * - Loading historical messages from server
  * - Real-time streaming of new messages
  * - Session switching
+ * - Usage/cost tracking
+ * - Session metadata (tools, agents, configuration)
  */
 
 import { create } from 'zustand';
+import type { UsageData } from '~/components/claude-chat/usage-card';
+import type { SessionMetadata } from '~/components/claude-chat/session-info-panel';
 
 // Define our own message types that are compatible with @assistant-ui/react
 export type TextContentPart = {
@@ -64,6 +68,22 @@ export type SDKMessage = {
   result?: string;
   is_error?: boolean;
   error?: string;
+  // Result event fields for usage/cost tracking
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  total_cost_usd?: number;
+  num_turns?: number;
+  duration_ms?: number;
+  modelUsage?: Record<string, {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens?: number;
+    costUSD: number;
+  }>;
 };
 
 interface ChatSessionState {
@@ -76,12 +96,20 @@ interface ChatSessionState {
   // Whether a query is in progress
   isRunning: boolean;
 
+  // Usage/cost data for current session
+  usageData: UsageData | null;
+
+  // Session metadata (tools, agents, configuration)
+  sessionMetadata: SessionMetadata | null;
+
   // Actions
   setSessionId: (sessionId: string | null) => void;
   setMessages: (messages: ThreadMessage[]) => void;
   addMessage: (message: ThreadMessage) => void;
   updateLastMessage: (content: ContentPart[]) => void;
   setIsRunning: (isRunning: boolean) => void;
+  setUsageData: (data: UsageData) => void;
+  setSessionMetadata: (data: SessionMetadata) => void;
   clearMessages: () => void;
 
   // Load historical messages from SDK format
@@ -201,6 +229,8 @@ export const useChatSessionStore = create<ChatSessionState>((set, get) => ({
   currentSessionId: null,
   messages: [],
   isRunning: false,
+  usageData: null,
+  sessionMetadata: null,
 
   setSessionId: (sessionId) => {
     set({ currentSessionId: sessionId });
@@ -234,22 +264,42 @@ export const useChatSessionStore = create<ChatSessionState>((set, get) => ({
     set({ isRunning });
   },
 
+  setUsageData: (data) => {
+    set({ usageData: data });
+  },
+
+  setSessionMetadata: (data) => {
+    set({ sessionMetadata: data });
+  },
+
   clearMessages: () => {
-    set({ messages: [] });
+    set({ messages: [], usageData: null, sessionMetadata: null });
   },
 
   loadHistoricalMessages: (sdkMessages) => {
     const converted: ThreadMessage[] = [];
+    let lastUsageData: UsageData | null = null;
 
     for (const sdkMsg of sdkMessages) {
       const msg = convertSDKMessage(sdkMsg);
       if (msg) {
         converted.push(msg);
       }
+
+      // Extract usage data from result events
+      if (sdkMsg.type === 'result' && (sdkMsg.usage || sdkMsg.total_cost_usd)) {
+        lastUsageData = {
+          usage: sdkMsg.usage,
+          total_cost_usd: sdkMsg.total_cost_usd,
+          num_turns: sdkMsg.num_turns,
+          duration_ms: sdkMsg.duration_ms,
+          modelUsage: sdkMsg.modelUsage,
+        };
+      }
     }
 
     console.log('[ChatSessionStore] Loaded', converted.length, 'historical messages from', sdkMessages.length, 'SDK messages');
-    set({ messages: converted });
+    set({ messages: converted, usageData: lastUsageData });
   },
 }));
 
