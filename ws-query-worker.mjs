@@ -59,6 +59,10 @@ process.stdin.on('end', async () => {
         model: config.model,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
+        // Enable skills loading from project (.claude/skills in cwd) and user (~/.claude/skills)
+        settingSources: ['project', 'user'],
+        // Use claude_code preset to get all default tools (which includes Skill tool)
+        tools: { type: 'preset', preset: 'claude_code' },
         ...(sdkResumeId && { resume: sdkResumeId }),
       },
     });

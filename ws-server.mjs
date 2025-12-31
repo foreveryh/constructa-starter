@@ -13,7 +13,7 @@
 
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { mkdir, readFile, readdir, access } from 'node:fs/promises';
+import { mkdir, readFile, readdir, access, symlink, unlink, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -271,6 +271,77 @@ async function ensureDirExists(dirPath) {
 }
 
 /**
+ * Ensure .claude symlink exists in workspace pointing to user's .claude directory
+ * This allows SDK to find skills/settings in the user's directory while working in session workspace
+ */
+async function ensureClaudeSymlink(workspacePath, claudeHome) {
+  const symlinkPath = path.join(workspacePath, '.claude');
+  const targetPath = path.join(claudeHome, '.claude');
+
+  try {
+    // Check if symlink already exists
+    const stats = await lstat(symlinkPath);
+
+    if (stats.isSymbolicLink()) {
+      // Symlink exists, verify it points to correct target
+      console.log(`[WS Server] .claude symlink already exists in workspace`);
+      return;
+    } else {
+      // Path exists but is not a symlink, remove it
+      console.log(`[WS Server] .claude exists but is not a symlink, removing...`);
+      await unlink(symlinkPath);
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error(`[WS Server] Error checking .claude symlink:`, error);
+      throw error;
+    }
+    // ENOENT is expected if symlink doesn't exist yet
+  }
+
+  // Create the symlink
+  try {
+    await symlink(targetPath, symlinkPath, 'dir');
+    console.log(`[WS Server] Created .claude symlink: ${symlinkPath} -> ${targetPath}`);
+  } catch (error) {
+    console.error(`[WS Server] Failed to create .claude symlink:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Verify that skills are accessible through the .claude symlink
+ * This health check ensures SDK can actually load skills from the workspace
+ */
+async function verifySkillsAccess(workspacePath) {
+  const skillsPath = path.join(workspacePath, '.claude', 'skills');
+
+  try {
+    // Check if skills directory is accessible
+    await access(skillsPath);
+
+    // Try to read skills directory
+    const skillDirs = await readdir(skillsPath, { withFileTypes: true });
+    const skills = skillDirs.filter(entry => entry.isDirectory()).map(entry => entry.name);
+
+    if (skills.length > 0) {
+      console.log(`[WS Server] ✓ Skills accessible: ${skills.length} skills found [${skills.join(', ')}]`);
+    } else {
+      console.log(`[WS Server] ⚠ Skills directory accessible but empty`);
+    }
+
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.warn(`[WS Server] ⚠ Skills directory not found: ${skillsPath}`);
+    } else {
+      console.error(`[WS Server] ✗ Skills not accessible:`, error.message);
+    }
+    return false;
+  }
+}
+
+/**
  * Authenticate request using session cookie
  */
 async function authenticateRequest(request) {
@@ -326,6 +397,13 @@ async function handleChat(ws, prompt, resumeSessionId) {
     // Get session-specific workspace (for Agent file operations)
     const workspacePath = getSessionWorkspace(ws.userId, workspaceSessionId);
     await ensureDirExists(workspacePath);
+
+    // Create .claude symlink in workspace pointing to user's .claude directory
+    // This allows SDK to find skills/settings while working in session workspace
+    await ensureClaudeSymlink(workspacePath, claudeHome);
+
+    // Verify skills are accessible through the symlink
+    await verifySkillsAccess(workspacePath);
 
     console.log(`[WS Server] User ${ws.userId} Session ${workspaceSessionId}`);
     console.log(`[WS Server]   CLAUDE_HOME: ${claudeHome}`);
@@ -399,6 +477,7 @@ async function handleChat(ws, prompt, resumeSessionId) {
               type: 'session_init',
               sessionId: ws.workspaceSessionId,
               sdkSessionId: event.session_id,
+              userId: ws.userId,  // Include userId for Skills isolation
             });
           }
           sendMessage(ws, { type: 'message', event });
@@ -522,6 +601,7 @@ async function handleMessage(ws, msg) {
         type: 'session_init',
         sessionId: message.sessionId,
         sdkSessionId: resumeSdkSessionId || null,
+        userId: ws.userId,  // Include userId for Skills isolation
       });
 
       // Load and send historical messages if we have session data
