@@ -59,8 +59,9 @@ process.stdin.on('end', async () => {
         model: config.model,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-        // Enable skills loading from project (.claude/skills in cwd) and user (~/.claude/skills)
-        settingSources: ['project', 'user'],
+        // Enable skills loading from project (.claude/skills in cwd)
+        // Note: We use symlink to share user's skills across sessions, so only 'project' is needed
+        settingSources: ['project'],
         // Use claude_code preset to get all default tools (which includes Skill tool)
         tools: { type: 'preset', preset: 'claude_code' },
         ...(sdkResumeId && { resume: sdkResumeId }),
