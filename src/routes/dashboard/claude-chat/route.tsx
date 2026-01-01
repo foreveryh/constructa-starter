@@ -30,7 +30,7 @@ import {
 } from '@radix-ui/react-icons';
 import { AuthLoading, RedirectToSignIn, SignedIn } from '@daveyplate/better-auth-ui';
 import { createFileRoute } from '@tanstack/react-router';
-import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ThumbsDown, ThumbsUp, FolderOpen } from 'lucide-react';
 import { useEffect, useState, useCallback, type FC } from 'react';
 import { MarkdownText } from '~/components/assistant-ui/markdown-text';
 import { SessionList } from '~/components/claude-chat/session-list';
@@ -38,6 +38,7 @@ import { UsageCard } from '~/components/claude-chat/usage-card';
 import { SessionInfoPanel } from '~/components/claude-chat/session-info-panel';
 import { ArtifactsPanel } from '~/components/claude-chat/artifacts-panel';
 import { ArtifactButton } from '~/components/claude-chat/artifact-button';
+import { WorkspaceSandpackPanel } from '~/components/claude-chat/workspace-sandpack-panel';
 import { ReasoningPart } from '~/components/agent-chat/reasoning-part';
 import { ToolCallPart } from '~/components/agent-chat/tool-call-part';
 import { useArtifactDetection } from '~/lib/hooks/use-artifact-detection';
@@ -203,9 +204,7 @@ function RouteComponent() {
           </div>
 
           {/* Right: Chat area + Artifacts Panel */}
-          <div className="flex-1 flex">
-            <ClaudeChatSurface key={chatKey} />
-          </div>
+          <ClaudeChatSurface key={chatKey} />
         </div>
 
         {/* Session Switch Blocked Dialog - shown when query is running */}
@@ -248,13 +247,19 @@ function ClaudeChatSurface() {
   const activeArtifactId = useArtifactsStore((state) => state.activeArtifactId);
   const setActiveArtifact = useArtifactsStore((state) => state.setActiveArtifact);
 
+  // Workspace panel state (session-level, persists across messages)
+  const [showWorkspace, setShowWorkspace] = useState(false);
+  const currentSessionId = getSessionId();
+
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      {/* Flex container for chat + artifacts */}
-      <div className="flex h-full">
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
+    <div className="flex-1">
+      <AssistantRuntimeProvider runtime={runtime}>
+        {activeArtifactId || (showWorkspace && currentSessionId) ? (
+          // With Artifacts or Workspace: use flex layout with fixed heights
+          <div className="flex h-full">
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
         <ThreadPrimitive.Viewport className="flex grow flex-col overflow-y-scroll">
           {/* Show empty state only when no historical messages */}
           {!hasHistoricalMessages && (
@@ -319,6 +324,17 @@ function ClaudeChatSurface() {
                 <ChevronDownIcon width={20} height={20} className="opacity-75" />
               </button>
 
+              {/* Workspace Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setShowWorkspace(!showWorkspace)}
+                className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee] disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="切换工作空间"
+                disabled={!currentSessionId}
+              >
+                <FolderOpen width={16} height={16} />
+              </button>
+
               {/* Session Info Button */}
               <div className="relative">
                 <button
@@ -347,20 +363,126 @@ function ClaudeChatSurface() {
           </div>
           <ComposerAttachmentsSection />
         </ComposerPrimitive.Root>
-      </ThreadPrimitive.Root>
-        </div>
-
-        {/* Artifacts Panel */}
-        {activeArtifactId && (
-          <div className="w-1/2 h-full">
-            <ArtifactsPanel
-              artifactId={activeArtifactId}
-              onClose={() => setActiveArtifact(null)}
-            />
+            </ThreadPrimitive.Root>
           </div>
-        )}
-      </div>
-    </AssistantRuntimeProvider>
+
+          {/* Artifacts Panel or Workspace Panel */}
+          <div className="w-1/2 h-full">
+            {activeArtifactId ? (
+              <ArtifactsPanel
+                artifactId={activeArtifactId}
+                onClose={() => setActiveArtifact(null)}
+              />
+            ) : showWorkspace && currentSessionId ? (
+              <WorkspaceSandpackPanel
+                sessionId={currentSessionId}
+                onClose={() => setShowWorkspace(false)}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        // Without Artifacts: normal layout
+        <ThreadPrimitive.Root className="flex h-full flex-col items-stretch bg-[#F5F5F0] p-4 pt-16 font-serif dark:bg-[#2b2a27]">
+          <ThreadPrimitive.Viewport className="flex grow flex-col overflow-y-scroll">
+            {/* Show empty state only when no historical messages */}
+            {!hasHistoricalMessages && (
+              <ThreadPrimitive.Empty>
+                <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                  <div className="text-4xl font-semibold text-[#1a1a18] dark:text-[#eee]">
+                    Claude Agent
+                  </div>
+                  <p className="max-w-md text-[#6b6a68] dark:text-[#9a9893]">
+                    Powered by Claude Agent SDK. I can read files, execute code, and help with various
+                    tasks.
+                  </p>
+                </div>
+              </ThreadPrimitive.Empty>
+            )}
+
+            {/* Render historical messages from store */}
+            {historicalMessages.map((msg) => (
+              <HistoricalMessage key={msg.id} message={msg} />
+            ))}
+
+            {/* Render live messages from runtime */}
+            <ThreadPrimitive.Messages components={{ Message: ChatMessage }} />
+            <div aria-hidden="true" className="h-4" />
+          </ThreadPrimitive.Viewport>
+
+          <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl flex-col rounded-2xl border border-transparent bg-white p-0.5 shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.035),0_0_0_0.5px_rgba(0,0,0,0.08)] transition-shadow duration-200 focus-within:shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.075),0_0_0_0.5px_rgba(0,0,0,0.15)] hover:shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.05),0_0_0_0.5px_rgba(0,0,0,0.12)] dark:bg-[#1f1e1b] dark:shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(108,106,96,0.15)] dark:hover:shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(108,106,96,0.3)] dark:focus-within:shadow-[0_0.25rem_1.25rem_rgba(0,0,0,0.5),0_0_0_0.5px_rgba(108,106,96,0.3)]">
+            <div className="m-3.5 flex flex-col gap-3.5">
+              <div className="relative">
+                <div className="wrap-break-word max-h-96 w-full overflow-y-auto">
+                  <ComposerPrimitive.Input
+                    placeholder="How can I help you today?"
+                    className="block min-h-6 w-full resize-none bg-transparent text-[#1a1a18] outline-none placeholder:text-[#9a9893] dark:text-[#eee] dark:placeholder:text-[#9a9893]"
+                  />
+                </div>
+              </div>
+              <div className="flex w-full items-center gap-2">
+                <div className="relative flex min-w-0 flex-1 shrink items-center gap-2">
+                  <ComposerPrimitive.AddAttachment className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee]">
+                    <PlusIcon width={16} height={16} />
+                  </ComposerPrimitive.AddAttachment>
+                  <button
+                    type="button"
+                    className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee]"
+                    aria-label="Open tools menu"
+                  >
+                    <MixerHorizontalIcon width={16} height={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-8 min-w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee]"
+                    aria-label="Extended thinking"
+                  >
+                    <ReloadIcon width={16} height={16} />
+                  </button>
+                </div>
+                <div className="flex h-8 min-w-16 items-center justify-center gap-1 whitespace-nowrap rounded-md px-2 pr-2 pl-2.5 text-[#1a1a18] text-xs transition duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-[#f5f5f0] active:scale-[0.985] dark:text-[#eee] dark:hover:bg-[#393937]">
+                  <span className="font-serif text-[14px]">GLM 4.6</span>
+                  <ChevronDownIcon width={20} height={20} className="opacity-75" />
+                </div>
+
+                {/* Workspace Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowWorkspace(!showWorkspace)}
+                  className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee] disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="切换工作空间"
+                  disabled={!currentSessionId}
+                >
+                  <FolderOpen width={16} height={16} />
+                </button>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex h-8 min-w-8 items-center justify-center overflow-hidden rounded-lg border border-[#00000015] bg-transparent px-1.5 text-[#6b6a68] transition-all hover:bg-[#f5f5f0] hover:text-[#1a1a18] active:scale-[0.98] dark:border-[#6c6a6040] dark:text-[#9a9893] dark:hover:bg-[#393937] dark:hover:text-[#eee] disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setShowSessionInfo(!showSessionInfo)}
+                    aria-label="查看会话信息"
+                  >
+                    <InfoCircledIcon width={16} height={16} />
+                  </button>
+                  {showSessionInfo && sessionMetadata && (
+                    <SessionInfoPanel
+                      data={sessionMetadata}
+                      onClose={() => setShowSessionInfo(false)}
+                    />
+                  )}
+                </div>
+                <ComposerPrimitive.Send className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ae5630] transition-colors hover:bg-[#c4633a] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:bg-[#ae5630] dark:hover:bg-[#c4633a]">
+                  <ArrowUpIcon width={16} height={16} className="text-white" />
+                </ComposerPrimitive.Send>
+              </div>
+            </div>
+            <ComposerAttachmentsSection />
+          </ComposerPrimitive.Root>
+        </ThreadPrimitive.Root>
+      )}
+      </AssistantRuntimeProvider>
+    </div>
   );
 }
 
@@ -435,6 +557,7 @@ const AssistantMessage: FC<{ isLast: boolean }> = ({ isLast }) => {
                     />
                   );
                 }
+                console.warn('[AssistantMessage] Unknown part type:', part.type, part);
                 return null;
               })}
 
