@@ -57,6 +57,8 @@ type SDKMessage = {
   tools?: string[];
   slash_commands?: string[];
   cwd?: string;
+  // Structured Outputs field (from outputFormat)
+  structured_output?: unknown;
 };
 
 // WebSocket message types (matching ws-server.ts)
@@ -266,8 +268,12 @@ async function send(message: InboundMessage): Promise<void> {
  * Abort current operation
  */
 export async function abort(): Promise<void> {
+  console.log('[WS Adapter] ⚠️ ABORT CALLED - Stack trace:', new Error().stack);
   if (ws && ws.readyState === WebSocket.OPEN) {
+    console.log('[WS Adapter] Sending abort message to server');
     ws.send(JSON.stringify({ type: 'abort' }));
+  } else {
+    console.log('[WS Adapter] WebSocket not open, cannot send abort');
   }
 }
 
@@ -348,6 +354,7 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
     // 4. Send chat message
     try {
       console.log('[WS Adapter] Sending chat message:', { type: 'chat', content: prompt.substring(0, 50), sessionId: currentSessionId });
+      console.log('[WS Adapter] Full prompt length:', prompt.length);
       // Set pending flag BEFORE sending so switch detection works immediately
       hasPendingChat = true;
       await send({
@@ -355,10 +362,10 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
         content: prompt,
         sessionId: currentSessionId,
       });
-      console.log('[WS Adapter] Message sent successfully');
+      console.log('[WS Adapter] ✅ Message sent successfully');
     } catch (connectError) {
       hasPendingChat = false;
-      console.error('[WS Adapter] Failed to send message:', connectError);
+      console.error('[WS Adapter] ❌ Failed to send message:', connectError);
       throw new Error('Failed to connect to WebSocket server');
     }
 
@@ -380,6 +387,8 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
         const msg = messageQueue.shift();
         if (!msg) continue;
+
+        console.log('[WS Adapter] Processing message type:', msg.type);
 
         switch (msg.type) {
           case 'session_init':
@@ -453,13 +462,35 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
 
                       case 'tool_use':
                         if (block.id && block.name) {
+                          // Ensure args is always a plain object (never array or primitive)
+                          let safeArgs: Record<string, unknown>;
+                          const inputType = block.input == null ? 'null' : Array.isArray(block.input) ? 'array' : typeof block.input;
+                          console.log(`[WS Adapter] tool_use: ${block.name}, input type: ${inputType}`, block.input);
+
+                          if (block.input == null) {
+                            safeArgs = {};
+                          } else if (Array.isArray(block.input)) {
+                            // If input is an array, wrap it in an object
+                            safeArgs = { items: block.input };
+                            console.warn('[WS Adapter] Wrapped array input for tool:', block.name);
+                          } else if (typeof block.input === 'object') {
+                            safeArgs = block.input as Record<string, unknown>;
+                          } else {
+                            // If input is a primitive, wrap it
+                            safeArgs = { value: block.input };
+                            console.warn('[WS Adapter] Wrapped primitive input for tool:', block.name);
+                          }
+
                           const toolPart: ToolCallPart = {
                             type: 'tool-call',
                             toolCallId: block.id,
                             toolName: block.name,
-                            args: (block.input as Record<string, unknown>) ?? {},
+                            args: safeArgs,
                             argsText: JSON.stringify(block.input ?? {}),
                           };
+
+                          console.log('[WS Adapter] Created toolPart:', { type: toolPart.type, toolName: toolPart.toolName, argsType: typeof toolPart.args, argsIsArray: Array.isArray(toolPart.args) });
+
                           toolCalls.set(block.id, toolPart);
                           content.push(toolPart);
                           shouldYield = true;
@@ -484,9 +515,28 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
                     if (block.type === 'tool_result' && block.tool_use_id) {
                       const toolPart = toolCalls.get(block.tool_use_id);
                       if (toolPart) {
+                        // Normalize block.content to a safe string format
+                        // block.content can be: string | array | object
+                        let resultContent: string;
+                        if (typeof block.content === 'string') {
+                          resultContent = block.content;
+                        } else if (Array.isArray(block.content)) {
+                          // Extract text from content blocks
+                          resultContent = block.content
+                            .map((item: any) => {
+                              if (typeof item === 'string') return item;
+                              if (item?.type === 'text') return item.text || '';
+                              return JSON.stringify(item);
+                            })
+                            .join('\n');
+                        } else {
+                          // Object or other type - stringify it
+                          resultContent = JSON.stringify(block.content, null, 2);
+                        }
+
                         const updatedPart: ToolCallPart = {
                           ...toolPart,
-                          result: block.content,
+                          result: resultContent,
                           isError: false,
                         };
                         toolCalls.set(block.tool_use_id, updatedPart);
@@ -524,6 +574,12 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
                   console.log('[WS Adapter] Saved usage data:', usageData);
                 }
 
+                // Extract and save structured output if available
+                if (event.structured_output) {
+                  useChatSessionStore.getState().setLastStructuredOutput(event.structured_output);
+                  console.log('[WS Adapter] Saved structured output:', event.structured_output);
+                }
+
                 if (event.is_error || event.subtype?.startsWith('error')) {
                   error = new Error(event.result || 'Agent execution failed');
                 }
@@ -536,10 +592,12 @@ export const ClaudeAgentWSAdapter: ChatModelAdapter = {
             break;
 
           case 'error':
+            console.error('[WS Adapter] ❌ Received error message:', msg.message);
             error = new Error(msg.message || 'Unknown error');
             break;
 
           case 'done':
+            console.log('[WS Adapter] ✅ Received done message');
             isComplete = true;
             break;
         }
