@@ -379,9 +379,13 @@ function sendMessage(ws, msg) {
 async function handleChat(ws, prompt, resumeSessionId) {
   // Kill any existing worker for this connection
   if (ws.workerProcess) {
+    console.log('[WS Server] Killing existing worker process');
     ws.workerProcess.kill();
     ws.workerProcess = null;
   }
+
+  console.log('[WS Server] handleChat called with prompt length:', prompt.length);
+  console.log('[WS Server] resumeSessionId:', resumeSessionId || 'none');
 
   try {
     // Get or generate workspace session ID
