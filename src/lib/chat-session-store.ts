@@ -102,6 +102,9 @@ interface ChatSessionState {
   // Session metadata (tools, agents, configuration)
   sessionMetadata: SessionMetadata | null;
 
+  // Structured output from last query (for artifact metadata)
+  lastStructuredOutput: unknown | null;
+
   // Actions
   setSessionId: (sessionId: string | null) => void;
   setMessages: (messages: ThreadMessage[]) => void;
@@ -110,6 +113,7 @@ interface ChatSessionState {
   setIsRunning: (isRunning: boolean) => void;
   setUsageData: (data: UsageData) => void;
   setSessionMetadata: (data: SessionMetadata) => void;
+  setLastStructuredOutput: (data: unknown | null) => void;
   clearMessages: () => void;
 
   // Load historical messages from SDK format
@@ -231,6 +235,7 @@ export const useChatSessionStore = create<ChatSessionState>((set, get) => ({
   isRunning: false,
   usageData: null,
   sessionMetadata: null,
+  lastStructuredOutput: null,
 
   setSessionId: (sessionId) => {
     set({ currentSessionId: sessionId });
@@ -272,8 +277,12 @@ export const useChatSessionStore = create<ChatSessionState>((set, get) => ({
     set({ sessionMetadata: data });
   },
 
+  setLastStructuredOutput: (data) => {
+    set({ lastStructuredOutput: data });
+  },
+
   clearMessages: () => {
-    set({ messages: [], usageData: null, sessionMetadata: null });
+    set({ messages: [], usageData: null, sessionMetadata: null, lastStructuredOutput: null });
   },
 
   loadHistoricalMessages: (sdkMessages) => {
