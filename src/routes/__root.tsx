@@ -104,7 +104,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <html lang="en" className={initial === 'system' ? '' : initial}>
+    <html lang="en" className={initial === 'system' ? '' : initial} suppressHydrationWarning>
       <head>
         {/* Early theme application – prevents FOUC without react/no-danger noise */}
         <ThemeInitScript />
@@ -115,7 +115,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <ThemeProvider initial={initial}>
             <AuthUIProviderTanstack
               authClient={authClient}
-              redirectTo="/dashboard"
+              redirectTo="/agents"
               navigate={(to) => router.navigate({ to })}
               replace={(to) => router.navigate({ to, replace: true })}
               Link={({ href, ...props }) => <Link to={href} {...props} />}
