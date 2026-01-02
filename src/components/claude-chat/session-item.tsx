@@ -6,7 +6,7 @@
  */
 
 import { cn } from '~/lib/utils';
-import { Star, MessageSquare, Pencil, Check, X } from 'lucide-react';
+import { Star, MessageSquare, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 
 export interface SessionItemData {
@@ -23,12 +23,14 @@ interface SessionItemProps {
   isActive: boolean;
   onClick: () => void;
   onUpdateTitle?: (id: string, title: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export function SessionItem({ session, isActive, onClick, onUpdateTitle }: SessionItemProps) {
+export function SessionItem({ session, isActive, onClick, onUpdateTitle, onDelete }: SessionItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(session.title || '');
   const [isHovered, setIsHovered] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const displayTitle = session.title || 'New Chat';
@@ -68,6 +70,26 @@ export function SessionItem({ session, isActive, onClick, onUpdateTitle }: Sessi
     } else if (e.key === 'Escape') {
       e.preventDefault();
       handleCancel();
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Confirm deletion
+    const confirmed = window.confirm(
+      `Delete "${displayTitle}"?\n\nThis will permanently delete the conversation and all its files.`
+    );
+
+    if (!confirmed || !onDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await onDelete(session.id);
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      alert('Failed to delete conversation. Please try again.');
+      setIsDeleting(false);
     }
   };
 
@@ -133,14 +155,36 @@ export function SessionItem({ session, isActive, onClick, onUpdateTitle }: Sessi
                   >
                     {displayTitle}
                   </span>
-                  {isHovered && onUpdateTitle && (
-                    <button
-                      type="button"
-                      onClick={handleStartEdit}
-                      className="p-0.5 hover:bg-[#00000010] dark:hover:bg-[#ffffff10] rounded opacity-60 hover:opacity-100"
-                    >
-                      <Pencil className="h-3 w-3 text-[#6b6a68] dark:text-[#9a9893]" />
-                    </button>
+                  {isHovered && (onUpdateTitle || onDelete) && (
+                    <div className="flex gap-0.5 items-center">
+                      {onUpdateTitle && (
+                        <button
+                          type="button"
+                          onClick={handleStartEdit}
+                          className="p-0.5 hover:bg-[#00000010] dark:hover:bg-[#ffffff10] rounded opacity-60 hover:opacity-100"
+                          title="Edit title"
+                        >
+                          <Pencil className="h-3 w-3 text-[#6b6a68] dark:text-[#9a9893]" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={isDeleting}
+                          className={cn(
+                            "p-0.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded opacity-60 hover:opacity-100",
+                            isDeleting && "opacity-40 cursor-not-allowed"
+                          )}
+                          title="Delete conversation"
+                        >
+                          <Trash2 className={cn(
+                            "h-3 w-3",
+                            isDeleting ? "text-gray-400" : "text-red-500"
+                          )} />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </>
               )}

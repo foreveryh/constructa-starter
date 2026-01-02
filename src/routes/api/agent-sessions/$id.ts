@@ -11,6 +11,8 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '~/db/db-config';
 import { agentSession } from '~/db/schema';
 import { requireUser } from '~/server/require-user';
+import { rm } from 'fs/promises';
+import { join } from 'path';
 
 export const Route = createFileRoute('/api/agent-sessions/$id')({
   server: {
@@ -85,22 +87,46 @@ export const Route = createFileRoute('/api/agent-sessions/$id')({
         const user = await requireUser(request);
         const { id } = params;
 
-        const [deleted] = await db
-          .delete(agentSession)
+        // 1. Query session to get claudeHomePath and sdkSessionId for file cleanup
+        const [session] = await db
+          .select()
+          .from(agentSession)
           .where(and(
             eq(agentSession.id, id),
             eq(agentSession.userId, user.id)
-          ))
-          .returning();
+          ));
 
-        if (!deleted) {
+        if (!session) {
           return new Response(
             JSON.stringify({ error: 'Session not found' }),
             { status: 404, headers: { 'content-type': 'application/json' } }
           );
         }
 
-        return Response.json({ success: true, deleted });
+        // 2. Delete database record
+        await db
+          .delete(agentSession)
+          .where(and(
+            eq(agentSession.id, id),
+            eq(agentSession.userId, user.id)
+          ));
+
+        // 3. Clean up workspace and JSONL files
+        try {
+          const sessionPath = join(
+            session.claudeHomePath,
+            'sessions',
+            session.sdkSessionId
+          );
+          await rm(sessionPath, { recursive: true, force: true });
+          console.log('[Session Delete] Successfully cleaned up workspace:', sessionPath);
+        } catch (error) {
+          // Log error but don't fail the request - database record is already deleted
+          console.error('[Session Delete] Failed to cleanup workspace files:', error);
+          console.error('[Session Delete] Path:', join(session.claudeHomePath, 'sessions', session.sdkSessionId));
+        }
+
+        return Response.json({ success: true, deleted: session });
       },
     },
   },
