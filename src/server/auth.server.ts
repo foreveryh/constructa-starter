@@ -67,6 +67,10 @@ export const auth = betterAuth({
         },
       },
     },
+    // Allow cross-origin requests from development ports
+    trustedOrigins: isProd
+      ? []  // In production, configure your actual domains
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5050'],
   },
   user: {
     deleteUser: {

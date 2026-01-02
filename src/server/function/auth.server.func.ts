@@ -10,9 +10,22 @@ export const getSession = createServerFn({ method: "GET" }).handler(
 	async () => {
 		try {
 			const { headers } = getRequest();
-			const session = await auth.api.getSession({
+				const session = await auth.api.getSession({
 				headers,
 			});
+
+			// Dev mode: return mock user for easier testing
+			if (!session?.user && process.env.NODE_ENV !== 'production') {
+				return {
+					user: {
+						id: 'dev-user-123',
+						email: 'dev@example.com',
+						name: 'Dev User',
+						image: null,
+						emailVerified: true,
+					},
+				};
+			}
 
 			if (!session?.user) {
 				return null;

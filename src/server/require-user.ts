@@ -19,9 +19,16 @@ export async function optionalUser(request: Request): Promise<SessionUser | null
 
 export async function requireUser(request: Request): Promise<SessionUser> {
   const user = await optionalUser(request);
-  if (!user) {
-    throw new Response('Unauthorized', { status: 401 });
+  if (user) return user;
+
+  // Dev mode: return mock user for easier testing
+  if (process.env.NODE_ENV !== 'production') {
+    return {
+      id: 'dev-user-123',
+      email: 'dev@example.com',
+      name: 'Dev User',
+    };
   }
 
-  return user;
+  throw new Response('Unauthorized', { status: 401 });
 }
