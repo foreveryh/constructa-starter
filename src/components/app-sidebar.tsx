@@ -17,50 +17,59 @@ import TerminalIcon from 'virtual:icons/ri/terminal-box-line';
 import ImageIcon from 'virtual:icons/ri/image-line';
 import FileTextIcon from 'virtual:icons/ri/file-text-line';
 import FlowChartIcon from 'virtual:icons/ri/flow-chart';
-import CameraIcon from 'virtual:icons/ri/camera-line';
-import FileListIcon from 'virtual:icons/ri/file-list-line';
-import FileCodeIcon from 'virtual:icons/ri/file-code-line';
 import HomeSmileIcon from 'virtual:icons/ri/home-smile-line';
 import SparklingIcon from 'virtual:icons/ri/sparkling-line';
+import { FEATURE_CONFIG } from '~/config/features';
 
 const navData = {
   navMain: [
     {
       title: 'Dashboard',
-      url: '/dashboard/charts',
+      url: '/agents/charts',
       icon: DashboardIcon,
+      enabled: FEATURE_CONFIG.dashboard,
     },
     {
       title: 'Chat',
-      url: '/dashboard/chat',
+      url: '/agents/chat',
       icon: ChatIcon,
+      enabled: FEATURE_CONFIG.chat,
     },
     {
       title: 'Agent Chat',
-      url: '/dashboard/agent-chat',
+      url: '/agents/agent-chat',
       icon: TerminalIcon,
+      enabled: FEATURE_CONFIG.agentChat,
     },
     {
       title: 'Claude Chat',
-      url: '/dashboard/claude-chat',
+      url: '/agents/claude-chat',
       icon: SparklingIcon,
+      enabled: FEATURE_CONFIG.claudeChat,
     },
     {
       title: 'Image Chat',
-      url: '/dashboard/image-chat',
+      url: '/agents/image-chat',
       icon: ImageIcon,
+      enabled: FEATURE_CONFIG.imageChat,
     },
     {
       title: 'Documents',
-      url: '/dashboard/documents',
+      url: '/agents/documents',
       icon: FileTextIcon,
+      enabled: FEATURE_CONFIG.documents,
     },
     {
       title: 'Workflow',
-      url: '/dashboard/workflow',
+      url: '/agents/workflow',
       icon: FlowChartIcon,
+      enabled: FEATURE_CONFIG.workflow,
     },
-  ],
+  ].filter((item) => item.enabled),
+
+  // navClouds section - temporarily hidden per feature configuration
+  // Uncomment when cloud features are needed
+  /*
   navClouds: [
     {
       title: 'Capture',
@@ -108,7 +117,8 @@ const navData = {
         },
       ],
     },
-  ],
+  ].filter((item) => item.enabled ?? false),
+  */
 };
 
 type SidebarUser = {
@@ -121,7 +131,7 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
   const resolvedUser = {
     name: user.name ?? user.email,
     email: user.email,
-    avatar: user.image ?? '/avatars/shadcn.jpg',
+    avatar: user.image ?? '/avatars/shadcn.svg',
   };
 
   return (
