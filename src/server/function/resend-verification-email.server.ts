@@ -23,7 +23,7 @@ export const resendVerificationEmail = createServerFn({ method: 'POST' })
       };
     }
 
-    const callbackURL = input?.callbackURL ?? '/dashboard';
+    const callbackURL = input?.callbackURL ?? '/agents';
 
     if (input?.email) {
       await auth.api.sendVerificationEmail({

@@ -54,7 +54,7 @@ const navData = {
       enabled: FEATURE_CONFIG.imageChat,
     },
     {
-      title: 'Documents',
+      title: 'Agent Chat',
       url: '/agents/documents',
       icon: FileTextIcon,
       enabled: FEATURE_CONFIG.documents,

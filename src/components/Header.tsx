@@ -35,7 +35,7 @@ export function Header() {
         <nav className="flex items-center gap-6">
           <SignedIn>
             <Link
-              to="/dashboard"
+              to="/agents"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Dashboard
@@ -92,7 +92,7 @@ export function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <Link to="/dashboard">
+            <Link to="/agents">
               <Button className="rounded-full bg-primary px-6 font-medium text-primary-foreground text-sm hover:bg-primary/90">
                 Dashboard <span className="ml-1">↗</span>
               </Button>

@@ -31,10 +31,10 @@ function readFromQuery(): string | null {
 
 function normalizeTarget(href: string | null): URL {
   if (!isClient) {
-    return new URL('/dashboard', 'http://localhost');
+    return new URL('/agents', 'http://localhost');
   }
   const origin = window.location.origin;
-  const candidate = href ?? '/dashboard';
+  const candidate = href ?? '/agents';
   try {
     if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
       const url = new URL(candidate);
@@ -45,7 +45,7 @@ function normalizeTarget(href: string | null): URL {
     }
     return new URL(candidate, origin);
   } catch {
-    return new URL('/dashboard', origin);
+    return new URL('/agents', origin);
   }
 }
 
@@ -76,7 +76,7 @@ export function BillingSuccessRedirect() {
 
     router
       .navigate({ href, replace: true })
-      .catch(() => router.navigate({ to: '/dashboard', search: { settings: 'plans', billingStatus: 'success' }, replace: true })
+      .catch(() => router.navigate({ to: '/agents', search: { settings: 'plans', billingStatus: 'success' }, replace: true })
         .catch(() => undefined));
   }, [router]);
 

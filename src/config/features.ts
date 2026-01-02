@@ -12,7 +12,7 @@ export const FEATURE_CONFIG = {
   agentChat: false,      // Agent Chat page - hidden
   claudeChat: true,      // Claude Chat page - enabled (core feature)
   imageChat: false,      // Image Chat page - hidden
-  documents: false,      // Documents page - hidden
+  documents: true,       // Documents page - enabled (shown as "Agent Chat")
   workflow: false,       // Workflow page - hidden
 
   // Cloud features (navClouds section)
