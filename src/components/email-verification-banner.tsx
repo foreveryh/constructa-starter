@@ -19,26 +19,28 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
 
   const [status, setStatus] = React.useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [error, setError] = React.useState<string | null>(null);
-
-  // Start with false to avoid SSR mismatch
   const [isDismissed, setIsDismissed] = React.useState(false);
 
   // Check localStorage on mount (client-side only)
   React.useEffect(() => {
-    const dismissed = localStorage.getItem(DISMISSED_KEY);
-    if (dismissed === 'true') {
-      setIsDismissed(true);
+    try {
+      const dismissed = localStorage.getItem(DISMISSED_KEY);
+      if (dismissed === 'true') {
+        setIsDismissed(true);
+      }
+    } catch (err) {
+      // Ignore localStorage errors
+      console.warn('[EmailVerificationBanner] localStorage read error:', err);
     }
   }, []);
 
-  // If dismissed, don't render
-  if (isDismissed) {
-    return null;
-  }
-
   const handleDismiss = React.useCallback(() => {
+    try {
+      localStorage.setItem(DISMISSED_KEY, 'true');
+    } catch (err) {
+      console.warn('[EmailVerificationBanner] localStorage write error:', err);
+    }
     setIsDismissed(true);
-    localStorage.setItem(DISMISSED_KEY, 'true');
   }, []);
 
   const searchString = React.useMemo(
@@ -65,8 +67,12 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
     }
   }, [callbackURL, resendFn]);
 
+  // Use display:none instead of returning null to avoid unmounting issues
   return (
-    <div className="relative rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
+    <div
+      className="relative rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
+      style={{ display: isDismissed ? 'none' : 'block' }}
+    >
       <button
         type="button"
         onClick={handleDismiss}
