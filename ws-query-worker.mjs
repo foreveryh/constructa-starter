@@ -96,8 +96,12 @@ process.stdin.on('end', async () => {
 
     console.error('[Worker] Creating query stream...');
 
-    // System message to guide Claude to use relative paths for file operations
-    const systemMessage = `You are working in a workspace directory at: ${config.cwd}
+    // System prompt extension to guide Claude to use relative paths for file operations
+    // Using preset form with 'append' to extend Claude Code's default system prompt
+    const workspaceInstructions = `
+
+IMPORTANT - Workspace File Operations:
+You are working in an isolated workspace directory at: ${config.cwd}
 
 When creating, writing, or editing files:
 - ALWAYS use relative paths (e.g., "index.html", "styles.css", "src/App.jsx")
@@ -127,8 +131,13 @@ Example bad file paths:
         settingSources: ['project'],
         // Use claude_code preset to get all default tools (which includes Skill tool)
         tools: { type: 'preset', preset: 'claude_code' },
-        // Add system message to guide file path behavior
-        systemMessage,
+        // Add system prompt to guide file path behavior
+        // IMPORTANT: Use 'systemPrompt' (not 'systemMessage') with preset + append
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: workspaceInstructions,
+        },
         // Enable Structured Outputs for artifact metadata (optional, controlled by env var)
         // IMPORTANT: Use 'outputFormat' parameter (not 'structuredOutput')
         ...(useStructuredOutputs && {
