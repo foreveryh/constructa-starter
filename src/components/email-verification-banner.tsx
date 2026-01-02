@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useRouterState, defaultStringifySearch } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
+import { Cross2Icon } from '@radix-ui/react-icons';
 
 import { Button } from '~/components/ui/button';
 import { resendVerificationEmail } from '~/server/function/resend-verification-email.server';
@@ -9,12 +10,36 @@ interface EmailVerificationBannerProps {
   readonly email: string;
 }
 
+// Storage key for dismissed state
+const DISMISSED_KEY = 'email-verification-banner-dismissed';
+
 export function EmailVerificationBanner({ email }: EmailVerificationBannerProps) {
   const location = useRouterState({ select: (state) => state.location });
   const resendFn = useServerFn(resendVerificationEmail);
 
   const [status, setStatus] = React.useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [error, setError] = React.useState<string | null>(null);
+
+  // Start with false to avoid SSR mismatch
+  const [isDismissed, setIsDismissed] = React.useState(false);
+
+  // Check localStorage on mount (client-side only)
+  React.useEffect(() => {
+    const dismissed = localStorage.getItem(DISMISSED_KEY);
+    if (dismissed === 'true') {
+      setIsDismissed(true);
+    }
+  }, []);
+
+  // If dismissed, don't render
+  if (isDismissed) {
+    return null;
+  }
+
+  const handleDismiss = React.useCallback(() => {
+    setIsDismissed(true);
+    localStorage.setItem(DISMISSED_KEY, 'true');
+  }, []);
 
   const searchString = React.useMemo(
     () => defaultStringifySearch(location.search),
@@ -41,8 +66,16 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
   }, [callbackURL, resendFn]);
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="relative rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
+      <button
+        type="button"
+        onClick={handleDismiss}
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100"
+        aria-label="Close"
+      >
+        <Cross2Icon className="h-4 w-4" />
+      </button>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pr-8">
         <div className="space-y-1">
           <p className="font-semibold">Verify your email address</p>
           <p>
