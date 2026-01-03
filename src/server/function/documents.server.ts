@@ -213,15 +213,20 @@ export const listDocuments = createServerFn({ method: 'GET' }).handler(async () 
   const user = await requireUser();
 
   const fileRows = await db
-    .select()
+    .select({
+      file: files,
+      sourceType: documents.sourceType,
+    })
     .from(files)
+    .leftJoin(documents, eq(files.id, documents.fileId))
     .where(eq(files.clientId, user.id))
     .orderBy(desc(files.createdAt));
 
   return Promise.all(
-    fileRows.map(async (file) => ({
-      ...file,
-      downloadUrl: await fileService.getFullFileUrl(file.key),
+    fileRows.map(async (row) => ({
+      ...row.file,
+      sourceType: row.sourceType,
+      downloadUrl: await fileService.getFullFileUrl(row.file.key),
     })),
   );
 });
