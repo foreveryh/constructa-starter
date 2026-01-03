@@ -13,113 +13,78 @@ import {
 } from '~/components/ui/sidebar';
 import DashboardIcon from 'virtual:icons/ri/dashboard-line';
 import ChatIcon from 'virtual:icons/ri/chat-3-line';
-import TerminalIcon from 'virtual:icons/ri/terminal-box-line';
 import ImageIcon from 'virtual:icons/ri/image-line';
 import FileTextIcon from 'virtual:icons/ri/file-text-line';
 import FlowChartIcon from 'virtual:icons/ri/flow-chart';
 import HomeSmileIcon from 'virtual:icons/ri/home-smile-line';
 import SparklingIcon from 'virtual:icons/ri/sparkling-line';
+import SettingsIcon from 'virtual:icons/ri/settings-4-line';
 import { FEATURE_CONFIG } from '~/config/features';
 
-const navData = {
-  navMain: [
-    {
-      title: 'Dashboard',
-      url: '/agents/charts',
-      icon: DashboardIcon,
-      enabled: FEATURE_CONFIG.dashboard,
-    },
-    {
-      title: 'Chat',
-      url: '/agents/chat',
-      icon: ChatIcon,
-      enabled: FEATURE_CONFIG.chat,
-    },
-    {
-      title: 'Agent Chat',
-      url: '/agents/agent-chat',
-      icon: TerminalIcon,
-      enabled: FEATURE_CONFIG.agentChat,
-    },
-    {
-      title: 'Claude Chat',
-      url: '/agents/claude-chat',
-      icon: SparklingIcon,
-      enabled: FEATURE_CONFIG.claudeChat,
-    },
-    {
-      title: 'Image Chat',
-      url: '/agents/image-chat',
-      icon: ImageIcon,
-      enabled: FEATURE_CONFIG.imageChat,
-    },
-    {
-      title: 'Agent Chat',
+const navSections = [
+  // Section 1: Claude Agent SDK
+  {
+    items: [
+      {
+        title: 'Claude Chat',
+        url: '/agents/claude-chat',
+        icon: SparklingIcon,
+        enabled: FEATURE_CONFIG.claudeChat,
+      },
+      {
+        title: 'Skills Store',
+        url: '/agents/skills',
+        icon: SettingsIcon,
+        enabled: FEATURE_CONFIG.skills,
+      },
+    ],
+    hasDivider: true,
+  },
+  // Section 2: Mastra SDK
+  {
+    items: [
+      {
+        title: 'Normal Chat',
+        url: '/agents/chat',
+        icon: ChatIcon,
+        enabled: FEATURE_CONFIG.chat,
+      },
+      {
+        title: 'Image Chat',
+        url: '/agents/image-chat',
+        icon: ImageIcon,
+        enabled: FEATURE_CONFIG.imageChat,
+      },
+      {
+        title: 'Workflow',
+        url: '/agents/workflow',
+        icon: FlowChartIcon,
+        enabled: FEATURE_CONFIG.workflow,
+      },
+    ],
+    hasDivider: true,
+  },
+  // Section 3: Other
+  {
+    items: [
+      {
+      title: 'Documents / KB',
       url: '/agents/documents',
       icon: FileTextIcon,
       enabled: FEATURE_CONFIG.documents,
-    },
-    {
-      title: 'Workflow',
-      url: '/agents/workflow',
-      icon: FlowChartIcon,
-      enabled: FEATURE_CONFIG.workflow,
-    },
-  ].filter((item) => item.enabled),
-
-  // navClouds section - temporarily hidden per feature configuration
-  // Uncomment when cloud features are needed
-  /*
-  navClouds: [
-    {
-      title: 'Capture',
-      icon: CameraIcon,
-      isActive: true,
-      url: '#',
-      items: [
-        {
-          title: 'Active Proposals',
-          url: '#',
-        },
-        {
-          title: 'Archived',
-          url: '#',
-        },
-      ],
-    },
-    {
-      title: 'Proposal',
-      icon: FileListIcon,
-      url: '#',
-      items: [
-        {
-          title: 'Active Proposals',
-          url: '#',
-        },
-        {
-          title: 'Archived',
-          url: '#',
-        },
-      ],
-    },
-    {
-      title: 'Prompts',
-      icon: FileCodeIcon,
-      url: '#',
-      items: [
-        {
-          title: 'Active Proposals',
-          url: '#',
-        },
-        {
-          title: 'Archived',
-          url: '#',
-        },
-      ],
-    },
-  ].filter((item) => item.enabled ?? false),
-  */
-};
+      },
+      {
+        title: 'Dashboards',
+        url: '/agents/charts',
+        icon: DashboardIcon,
+        enabled: FEATURE_CONFIG.dashboard,
+      },
+    ],
+  },
+].map((section) => ({
+  ...section,
+  items: section.items.filter((item) => item.enabled),
+})).filter((section) => section.items.length > 0);
 
 type SidebarUser = {
   name?: string | null;
@@ -149,7 +114,7 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navData.navMain} />
+        <NavMain sections={navSections} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={resolvedUser} />

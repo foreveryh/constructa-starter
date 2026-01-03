@@ -6,19 +6,23 @@
  */
 
 export const FEATURE_CONFIG = {
-  // Navigation features
-  dashboard: false,      // Dashboard page - hidden
-  chat: false,           // Chat page - hidden
-  agentChat: false,      // Agent Chat page - hidden
-  claudeChat: true,      // Claude Chat page - enabled (core feature)
-  imageChat: false,      // Image Chat page - hidden
-  documents: true,       // Documents page - enabled (shown as "Agent Chat")
-  workflow: false,       // Workflow page - hidden
+  // Section 1: Claude Agent SDK
+  claudeChat: true,       // Claude Chat page - enabled
+  skills: true,           // Skills Store page - enabled
+
+  // Section 2: Mastra SDK
+  chat: true,             // Normal Chat page - enabled
+  imageChat: true,        // Image Chat page - enabled
+  workflow: true,         // Workflow page - enabled
+
+  // Section 3: Other
+  documents: true,        // Documents / KB page - enabled
+  dashboard: false,       // Dashboards page - hidden
 
   // Cloud features (navClouds section)
-  capture: false,        // Capture feature - hidden
-  proposal: false,       // Proposal feature - hidden
-  prompts: false,        // Prompts feature - hidden
+  capture: false,          // Capture feature - hidden
+  proposal: false,         // Proposal feature - hidden
+  prompts: false,          // Prompts feature - hidden
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_CONFIG;
