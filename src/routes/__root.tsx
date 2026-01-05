@@ -24,6 +24,37 @@ import customCss from '../styles/custom.css?url';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
+// Global error handler for debugging
+if (typeof window !== 'undefined') {
+  // Log environment variables for debugging
+  console.log('[Env Debug] Vite environment variables:', {
+    VITE_BASE_URL: import.meta.env.VITE_BASE_URL,
+    VITE_WS_URL: import.meta.env.VITE_WS_URL,
+    MODE: import.meta.env.MODE,
+    DEV: import.meta.env.DEV,
+    PROD: import.meta.env.PROD,
+    'all env keys': Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')),
+  });
+
+  window.addEventListener('error', (event) => {
+    console.error('[Global Error Handler]', {
+      message: event.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      error: event.error,
+      stack: event.error?.stack,
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Global Promise Rejection]', {
+      reason: event.reason,
+      stack: event.reason?.stack,
+    });
+  });
+}
+
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({

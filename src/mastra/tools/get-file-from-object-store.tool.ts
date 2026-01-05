@@ -28,8 +28,8 @@ export const getFileFromObjectStore = createTool({
     content: z.string().describe('Possibly truncated file contents'),
     truncated: z.boolean().optional(),
   }),
-  execute: async ({ context }) => {
-    const { key, bucket: bucketOverride, maxBytes } = InputSchema.parse(context);
+  execute: async (inputData, context) => {
+    const { key, bucket: bucketOverride, maxBytes } = InputSchema.parse(inputData);
     const bucket = bucketOverride ?? getDefaultBucket();
 
     if (!bucket) {
