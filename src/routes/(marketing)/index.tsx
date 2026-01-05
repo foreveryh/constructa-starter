@@ -1,28 +1,20 @@
-import {} from '@tanstack/react-router';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import {
-  Code2,
-  Zap,
-  Shield,
-  Clock,
-  Rocket,
+  MessageSquare,
   Sparkles,
   CheckCircle2,
   ArrowRight,
-  Terminal,
+  Code2,
   Database,
   Palette,
-  Users,
-  BarChart3,
-  FileText,
-  Image,
-  MessageSquare,
+  Cpu,
+  Zap,
+  Box,
   GitBranch,
-  Settings,
-  Package,
+  BarChart3,
 } from 'lucide-react';
 import GradientOrb from '~/components/gradient-orb';
 
@@ -39,376 +31,251 @@ function RouteComponent() {
 
         <Badge variant="secondary" className="mb-4 px-4 py-1">
           <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-          AI + Human Development
+          Claude Agent SDK + Zhipu AI GLM-4.7
         </Badge>
 
         <h1 className="max-w-4xl font-bold text-4xl text-foreground md:text-6xl lg:text-7xl">
-          The AI-First Starter Kit That Actually Works
+          Claude Desktop-Style Agent Chat
         </h1>
 
         <p className="mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
-          Built for AI assistants to understand, extend, and build upon. Finally, a foundation where
-          Cursor and Claude become your most productive teammates.
+          A full-featured AI agent interface powered by Zhipu AI GLM-4.7. Features Skills Store,
+          Artifacts, Knowledge Base, and Session Management via WebSocket.
         </p>
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-          <Button size="lg" className="rounded-full px-8">
-            Start Building with AI <ArrowRight className="ml-2 h-4 w-4" />
+          <Button size="lg" asChild className="rounded-full px-8">
+            <Link to="/agents/claude-chat">
+              Try Claude Agent Chat <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </Button>
-          <Button size="lg" variant="outline" className="rounded-full px-8">
-            <GitBranch className="mr-2 h-4 w-4" />
-            View on GitHub
+          <Button size="lg" variant="outline" className="rounded-full px-8" asChild>
+            <a
+              href="https://github.com/foreveryh/constructa-starter"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on GitHub
+            </a>
           </Button>
         </div>
 
         <p className="mt-8 text-muted-foreground text-sm">
           Powered by{' '}
           <a
-            href="https://instructa.ai"
+            href="https://open.bigmodel.cn/"
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
-            instructa.ai
+            Zhipu AI GLM-4.7
           </a>
         </p>
       </section>
 
-      {/* Problem Section */}
+      {/* Core Features Section */}
       <section className="container mx-auto px-4 py-16 md:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            AI Can Write Code, But It Needs the Right Foundation
+            Full-Featured Claude Agent Experience
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Most codebases confuse AI assistants with inconsistent patterns and poor structure
-          </p>
-        </div>
-
-        <div className="mt-12 grid gap-8 md:grid-cols-3">
-          <Card className="border-destructive/20 bg-destructive/5">
-            <CardHeader>
-              <Code2 className="mb-2 h-8 w-8 text-destructive" />
-              <CardTitle>AI Gets Lost</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Inconsistent code patterns make AI suggestions unreliable and often wrong
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-destructive/20 bg-destructive/5">
-            <CardHeader>
-              <Terminal className="mb-2 h-8 w-8 text-destructive" />
-              <CardTitle>Context Confusion</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Without proper structure, AI lacks the context to make meaningful contributions
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-destructive/20 bg-destructive/5">
-            <CardHeader>
-              <Settings className="mb-2 h-8 w-8 text-destructive" />
-              <CardTitle>Manual Everything</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                You spend more time fixing AI mistakes than actually building features
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Solution Section */}
-      <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            A Foundation Where AI Becomes Your Best Developer
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            Structured for AI comprehension, consistent patterns throughout, TypeScript everywhere
-          </p>
-        </div>
-
-        <div className="mt-12 grid gap-8 md:grid-cols-3">
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader>
-              <Sparkles className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>AI Understands</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Cursor rules and consistent patterns mean AI gets it right the first time
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader>
-              <Users className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>Human + AI Flow</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                You guide the vision, AI handles implementation with perfect context
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader>
-              <Rocket className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>10x Productivity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Build features in hours that used to take weeks, with AI as your pair programmer
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Product Features Grid */}
-      <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Everything Pre-Configured for AI-Assisted Development
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            A complete toolkit where every line of code is optimized for AI comprehension
+            Everything you need from Claude Desktop, plus Skills Store and more
           </p>
         </div>
 
         <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {/* Main Feature - Spans 2 columns on large screens */}
-          <Card className="lg:col-span-2">
+          {/* Claude Agent Chat */}
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <Badge className="mb-4 w-fit">Most Important</Badge>
-              <CardTitle className="text-2xl">AI-Optimized Architecture</CardTitle>
-              <CardDescription className="text-base">
-                Our carefully structured codebase ensures AI assistants understand your project
-                perfectly. With Cursor rules, consistent patterns, and TypeScript throughout, you'll
-                build features faster than ever before.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium">Cursor Rules</p>
-                    <p className="text-sm text-muted-foreground">
-                      Pre-configured for optimal AI coding
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium">TypeScript First</p>
-                    <p className="text-sm text-muted-foreground">
-                      Full type safety for better AI assistance
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium">Consistent Patterns</p>
-                    <p className="text-sm text-muted-foreground">
-                      Standardized code AI can easily extend
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium">Smart Tooling</p>
-                    <p className="text-sm text-muted-foreground">
-                      Oxlint, Vitest, and custom CLI included
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Authentication Feature */}
-          <Card>
-            <CardHeader>
-              <Shield className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>Complete Authentication</CardTitle>
+              <MessageSquare className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle>Claude Agent Chat</CardTitle>
               <CardDescription>
-                Email/password, OAuth (GitHub, Google), password reset, email verification - all
-                configured
+                Full Claude Desktop replica with Claude Agent SDK integration
               </CardDescription>
             </CardHeader>
           </Card>
 
-          {/* Dashboard Templates */}
-          <Card>
+          {/* Skills Store */}
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <BarChart3 className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>Dashboard Templates</CardTitle>
+              <Box className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle>Skills Store</CardTitle>
               <CardDescription>
-                Pre-built AI chat, workflows, documents, image chat, and analytics dashboards
+                Enable/disable custom skills to extend agent capabilities dynamically
               </CardDescription>
             </CardHeader>
           </Card>
 
-          {/* Database & ORM */}
-          <Card>
+          {/* Artifacts */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <GitBranch className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle>Artifacts System</CardTitle>
+              <CardDescription>
+                Support for HTML, Markdown, React, and SVG artifacts with live preview
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          {/* Knowledge Base */}
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
               <Database className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>Database Ready</CardTitle>
+              <CardTitle>Knowledge Base</CardTitle>
               <CardDescription>
-                PostgreSQL with Docker, Drizzle ORM, migrations, and Supabase compatibility
+                Upload and manage documents for context-aware conversations
               </CardDescription>
             </CardHeader>
           </Card>
 
-          {/* Modern UI */}
-          <Card>
+          {/* Session Management */}
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <Palette className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle>Beautiful UI</CardTitle>
+              <GitBranch className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle>Session Management</CardTitle>
               <CardDescription>
-                shadcn/ui components, Tailwind CSS v4, dark mode, and responsive design
+                Create, resume, and switch between multiple chat sessions with full history
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          {/* Tool Visualization */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <Cpu className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle>Tool Visualization</CardTitle>
+              <CardDescription>
+                See tool calls, arguments, and results in real-time with detailed feedback
               </CardDescription>
             </CardHeader>
           </Card>
         </div>
       </section>
 
-      {/* Process Section */}
+      {/* Tech Stack Section */}
       <section className="container mx-auto px-4 py-16 md:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Start Building with AI in 3 Simple Steps
+            Production-Ready Tech Stack
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Get your AI-powered development environment ready in minutes
+            Built on proven technologies for reliability and scalability
           </p>
         </div>
 
-        <div className="mt-12 grid gap-8 md:grid-cols-3">
-          <div className="relative">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <span className="font-bold">1</span>
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Clone the AI-Ready Foundation</h3>
-            <p className="text-muted-foreground">
-              Get the pre-configured starter kit with Cursor rules and AI-optimized patterns
-            </p>
-            <div className="mt-4 rounded-md bg-muted p-3">
-              <code className="text-sm">npx gitpick constructa-starter my-app</code>
-            </div>
-          </div>
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code2 className="h-5 w-5 text-primary" />
+                Claude Chat (Main Feature)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Claude Agent SDK
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Zhipu AI GLM-4.7
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  WebSocket (real-time)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Assistant UI components
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
 
-          <div className="relative">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <span className="font-bold">2</span>
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Configure Your Stack</h3>
-            <p className="text-muted-foreground">
-              Set up authentication, database, and features - all structured for AI comprehension
-            </p>
-            <div className="mt-4 rounded-md bg-muted p-3">
-              <code className="text-sm">pnpm ex0 init</code>
-            </div>
-          </div>
-
-          <div className="relative">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <span className="font-bold">3</span>
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Let AI Build Your Features</h3>
-            <p className="text-muted-foreground">
-              Open in Cursor or your AI editor and watch as AI understands and extends your code
-              perfectly
-            </p>
-            <div className="mt-4 rounded-md bg-muted p-3">
-              <code className="text-sm">pnpm dev</code>
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-primary" />
+                Additional Features
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Mastra AI Chat (SSE-based)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Better Auth (OAuth + password)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  PostgreSQL + Drizzle ORM
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  shadcn/ui + Tailwind CSS v4
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
-      {/* FAQ Section */}
+      {/* Architecture Section */}
       <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="mb-12 text-center text-3xl font-bold tracking-tight md:text-4xl">
-            Frequently Asked Questions
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+            Two Independent Chat Systems
           </h2>
+          <p className="mt-4 text-lg text-muted-foreground">
+            Built for different use cases with optimal architectures
+          </p>
+        </div>
 
-          <div className="space-y-8">
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">
-                What makes this different from other starter kits?
-              </h3>
-              <p className="text-muted-foreground">
-                Constructa is specifically optimized for AI-assisted development. We include Cursor
-                rules, consistent patterns, and TypeScript throughout to ensure AI tools like Cursor
-                and Claude can understand and extend your codebase effectively.
-              </p>
-            </div>
+        <div className="mt-12 grid gap-8 md:grid-cols-2">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <Badge className="mb-2 w-fit">Main Feature</Badge>
+              <CardTitle className="text-xl">Claude Agent Chat</CardTitle>
+              <CardDescription className="text-base">
+                Full-featured agent with WebSocket-based real-time communication
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Skills Store for dynamic capabilities</li>
+                <li>• Artifacts panel with multiple formats</li>
+                <li>• Session management and history</li>
+                <li>• Tool call visualization</li>
+                <li>• Knowledge Base integration</li>
+                <li>• Usage statistics tracking</li>
+              </ul>
+            </CardContent>
+          </Card>
 
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">
-                Do I need to be an expert developer to use this?
-              </h3>
-              <p className="text-muted-foreground">
-                No! The starter kit is designed to work seamlessly with AI assistants. Even if
-                you're a beginner, the AI can help you understand and modify the code. The
-                consistent patterns make it easy to learn and build upon.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">
-                What's included in the authentication system?
-              </h3>
-              <p className="text-muted-foreground">
-                We use Better Auth with pre-built components for sign in/up, password reset, email
-                verification, OAuth (GitHub & Google), and session management. Everything is fully
-                configured and ready to customize.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">
-                Can I use this for commercial projects?
-              </h3>
-              <p className="text-muted-foreground">
-                Absolutely! The starter kit is MIT licensed, meaning you can use it for any project,
-                including commercial ones. No attribution required, though we appreciate it!
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">How do I deploy this to production?</h3>
-              <p className="text-muted-foreground">
-                The starter kit works with any Node.js hosting platform. We recommend Vercel,
-                Railway, or Render for easy deployment. The build process is already configured -
-                just connect your repo and deploy.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xl font-semibold">Is this actively maintained?</h3>
-              <p className="text-muted-foreground">
-                Yes! We regularly update dependencies, add new features, and improve the AI
-                integration. The project is under active development with a growing community of
-                contributors.
-              </p>
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <Badge variant="secondary" className="mb-2 w-fit">Secondary</Badge>
+              <CardTitle className="text-xl">Mastra AI Chat</CardTitle>
+              <CardDescription className="text-base">
+                Simple chat interface using Mastra + SSE streaming
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Mastra Agent Framework</li>
+                <li>• Zhipu AI GLM-4.7 model</li>
+                <li>• Vercel AI SDK integration</li>
+                <li>• SSE-based streaming</li>
+                <li>• Modern AI Elements UI</li>
+                <li>• File reading capability</li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -416,20 +283,24 @@ function RouteComponent() {
       <section className="container mx-auto px-4 py-16 md:py-24">
         <Card className="mx-auto max-w-2xl border-primary/20 bg-primary/5">
           <CardContent className="flex flex-col items-center p-8 text-center md:p-12">
-            <Zap className="mb-4 h-12 w-12 text-primary" />
+            <MessageSquare className="mb-4 h-12 w-12 text-primary" />
             <h2 className="mb-4 text-2xl font-bold md:text-3xl">
-              Ready to Code with AI as Your Teammate?
+              Ready to Try Claude Agent Chat?
             </h2>
             <p className="mb-8 text-muted-foreground">
-              Join developers building the future with human creativity and AI productivity
+              Start chatting with the AI agent powered by Claude Agent SDK and Skills Store
             </p>
             <div className="flex flex-col gap-4 sm:flex-row">
-              <Button size="lg" className="rounded-full px-8">
-                Get the AI Starter Kit <ArrowRight className="ml-2 h-4 w-4" />
+              <Button size="lg" className="rounded-full px-8" asChild>
+                <Link to="/agents/claude-chat">
+                  Start Claude Chat <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
               </Button>
-              <Button size="lg" variant="outline" className="rounded-full px-8">
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Join AI Builders Community
+              <Button size="lg" variant="outline" className="rounded-full px-8" asChild>
+                <Link to="/agents/skills">
+                  <Box className="mr-2 h-4 w-4" />
+                  Browse Skills
+                </Link>
               </Button>
             </div>
           </CardContent>
@@ -443,16 +314,41 @@ function RouteComponent() {
             © 2024 Constructa Starter. MIT License.
           </p>
           <p className="text-center text-sm text-muted-foreground">
-            Powered by{' '}
             <a
-              href="https://instructa.ai"
+              href="https://github.com/foreveryh/constructa-starter"
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              instructa.ai
-            </a>{' '}
-            • AI-First Development Platform
+              GitHub
+            </a>
+            {' '}&bull;{' '}
+            <a
+              href="https://github.com/anthropics/claude-agent-kit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Claude Agent SDK
+            </a>
+            {' '}&bull;{' '}
+            <a
+              href="https://open.bigmodel.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Zhipu AI
+            </a>
+            {' '}&bull;{' '}
+            <a
+              href="https://assistant-ui.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Assistant UI
+            </a>
           </p>
         </div>
       </footer>
