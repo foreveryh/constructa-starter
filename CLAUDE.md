@@ -63,3 +63,123 @@ docker-compose up -d
 - 主分支: `main`
 - 远程仓库: `origin` → https://github.com/foreveryh/constructa-starter
 - 直接在 `main` 分支开发，或创建 feature 分支后合并
+
+## Mastra AI SDK 集成注意事项
+
+### 版本信息
+- `@mastra/core`: `1.0.0-beta.19` (v1 Beta 版本，API 有重大变化)
+- `@mastra/ai-sdk`: `1.0.0-beta.12` (用于 AI SDK UI 集成)
+- `ai`: Vercel AI SDK 核心包
+- `@ai-sdk/react`: Vercel AI SDK React 集成
+
+### API 变化 (关键！)
+
+Mastra v1 Beta 的 Agent API 发生了重大变化：
+
+| 旧 API (AI SDK v4/v1) | 新 API (AI SDK v5/v2) | 说明 |
+|---------------------|---------------------|------|
+| `stream()` | `streamLegacy()` | 仅支持 v1 模型 |
+| `generate()` | `generateLegacy()` | 仅支持 v1 模型 |
+| ~~`streamVNext()`~~ | `stream()` | 现在 `stream()` 就是新 API |
+| ~~`generateVNext()`~~ | `generate()` | 现在 `generate()` 就是新 API |
+
+### 正确的集成方式
+
+**后端 API 路由** (`/src/routes/api/chat.tsx`):
+```typescript
+import { handleChatStream } from '@mastra/ai-sdk';
+import { createUIMessageStreamResponse } from 'ai';
+import { mastra } from '~/mastra';
+
+export const Route = createFileRoute('/api/chat')({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const body = await request.json();
+        const stream = await handleChatStream({
+          mastra,
+          agentId: 'codebase-agent',
+          params: { messages: body.messages },
+        });
+        return createUIMessageStreamResponse({ stream });
+      },
+    },
+  },
+});
+```
+
+**前端组件** (`/src/components/ai-sdk-chat.tsx`):
+```typescript
+import { useChat } from '@ai-sdk/react';
+
+const { messages, sendMessage, status, regenerate } = useChat({
+  api: '/api/chat',
+});
+```
+
+### 常见错误和陷阱
+
+❌ **错误方式** - 直接使用 Agent 的流式方法：
+```typescript
+// 这些方法不存在或返回类型不对
+agent.stream().toResponse()
+stream.toTextStreamResponse()
+agent.streamVNext()
+stream.aisdk.v5.toTextStreamResponse()
+```
+
+✅ **正确方式** - 使用 `@mastra/ai-sdk` 的工具函数：
+```typescript
+import { handleChatStream } from '@mastra/ai-sdk';
+import { createUIMessageStreamResponse } from 'ai';
+
+const stream = await handleChatStream({
+  mastra,
+  agentId: 'your-agent-id',
+  params: { messages },
+});
+return createUIMessageStreamResponse({ stream });
+```
+
+### 官方文档参考
+
+集成 AI SDK UI 时，**必须先查阅官方文档**：
+- [Using AI SDK UI](https://mastra.ai/guides/v1/build-your-ui/ai-sdk-ui)
+- [Migration: VNext to Standard APIs](https://mastra.ai/guides/v1/migrations/vnext-to-standard-apis)
+- [Agent Upgrade Guide](https://mastra.ai/guides/v1/migrations/upgrade-to-v1/agent)
+
+### 流式响应格式
+
+API 返回的 Server-Sent Events (SSE) 格式：
+- `{"type":"start","messageId":"..."}` - 消息开始
+- `{"type":"reasoning-start","id":"..."}` - 推理开始
+- `{"type":"text-delta","id":"...","delta":"..."}` - 文本增量
+- `{"type":"tool-input-start",...}` - 工具调用开始
+- `{"type":"finish"}` - 完成
+
+### GLM-4.7 模型配置
+
+使用 Zhipu AI GLM-4.7 模型时的配置：
+
+**Agent 定义** (`/src/mastra/agents/codebase-agent.ts`):
+```typescript
+import { Agent } from '@mastra/core/agent';
+
+export const codebaseAgent = new Agent({
+  id: 'codebase-agent',
+  name: 'codebase-agent',
+  instructions: '...',
+  model: 'zhipuai/glm-4.7',  // 使用 Mastra 的 model gateway
+  tools: { /* ... */ },
+});
+```
+
+**环境变量** (`.env`):
+```bash
+# Zhipu AI API Key (Mastra Gateway 使用)
+ZHIPU_API_KEY=your_api_key_here
+
+# 或使用 OpenAI 兼容格式
+OPENAI_API_KEY=your_api_key_here
+OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+```
