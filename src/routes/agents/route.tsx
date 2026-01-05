@@ -1,0 +1,91 @@
+import { Outlet, redirect, createFileRoute, defaultStringifySearch } from '@tanstack/react-router';
+import { AppSidebar } from '~/components/app-sidebar';
+import { SiteHeader } from '~/components/site-header';
+import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar';
+import { getSession } from '~/server/function/auth.server.func';
+import { EmailVerificationBanner } from '~/components/email-verification-banner';
+
+export const Route = createFileRoute('/agents')({
+  // All children (/agents, /agents/settings, etc.) inherit this guard
+  beforeLoad: async ({ location }) => {
+    console.log('[Route /agents] beforeLoad - starting', {
+      pathname: location.pathname,
+      search: location.search,
+      hasSearch: !!location.search,
+      searchType: typeof location.search,
+    });
+
+    // Safely handle search params
+    const searchParams = location.search || {};
+
+    const session = await getSession();
+
+    console.log('[Route /agents] getSession result:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userKeys: session?.user ? Object.keys(session.user) : [],
+      user: session?.user,
+    });
+
+    if (!session) {
+      // Preserve deep link for redirect after sign-in
+      try {
+        const searchString = defaultStringifySearch(searchParams);
+        const redirectPath = `${location.pathname}${searchString}`;
+
+        console.log('[Route /agents] Redirecting to sign-in:', { redirectPath });
+
+        throw redirect({
+          to: '/auth/$pathname',
+          params: { pathname: 'sign-in' },
+          search: { redirect: redirectPath },
+        });
+      } catch (error) {
+        console.error('[Route /agents] Error during redirect:', error);
+        // Fallback: redirect without search params
+        throw redirect({
+          to: '/auth/$pathname',
+          params: { pathname: 'sign-in' },
+        });
+      }
+    }
+
+    // Ensure user object has all required fields
+    const user = {
+      id: session.user.id ?? '',
+      email: session.user.email ?? '',
+      name: session.user.name ?? null,
+      image: session.user.image ?? null,
+      emailVerified: session.user.emailVerified ?? false,
+    };
+
+    console.log('[Route /agents] Returning user context:', { user });
+
+    return { user };
+  },
+  component: RouteComponent,
+});
+
+function RouteComponent() {
+  const { user } = Route.useRouteContext();
+  return (
+    <SidebarProvider defaultOpen={false}>
+      <AppSidebar variant="inset" user={user} />
+      <SidebarInset>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col min-h-0">
+          {!user.emailVerified ? (
+            <div className="px-4 pt-4 md:px-6 shrink-0">
+              <EmailVerificationBanner email={user.email} />
+            </div>
+          ) : null}
+          <div className="@container/main flex flex-1 flex-col min-h-0 gap-2">
+            <div className="flex flex-1 flex-col min-h-0 gap-4 md:gap-6 overflow-hidden">
+              <Outlet />
+            </div>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
