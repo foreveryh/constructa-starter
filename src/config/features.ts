@@ -10,10 +10,9 @@ export const FEATURE_CONFIG = {
   claudeChat: true,       // Claude Chat page - enabled
   skills: true,           // Skills Store page - enabled
 
-  // Section 2: Mastra SDK
-  chat: true,             // Normal Chat page - enabled
-  imageChat: true,        // Image Chat page - enabled
-  workflow: true,         // Workflow page - enabled
+  // Section 2: AI SDK (using @ai-sdk/react + AI Elements)
+  aiChat: true,           // AI SDK Chat - enabled (with file attachments)
+  aiWorkflow: true,       // AI SDK Workflow - enabled
 
   // Section 3: Other
   documents: true,        // Documents / KB page - enabled

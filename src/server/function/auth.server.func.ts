@@ -9,13 +9,23 @@ import { auth } from "../auth.server";
 export const getSession = createServerFn({ method: "GET" }).handler(
 	async () => {
 		try {
+			console.log('[getSession] Fetching session...');
 			const { headers } = getRequest();
-				const session = await auth.api.getSession({
+			console.log('[getSession] Headers:', Object.fromEntries(headers.entries()));
+
+			const session = await auth.api.getSession({
 				headers,
+			});
+
+			console.log('[getSession] Auth session result:', {
+				hasSession: !!session,
+				hasUser: !!session?.user,
+				user: session?.user,
 			});
 
 			// Dev mode: return mock user for easier testing
 			if (!session?.user && process.env.NODE_ENV !== 'production') {
+				console.log('[getSession] Dev mode: returning mock user');
 				return {
 					user: {
 						id: 'dev-user-123',
@@ -28,10 +38,11 @@ export const getSession = createServerFn({ method: "GET" }).handler(
 			}
 
 			if (!session?.user) {
+				console.log('[getSession] No user in session, returning null');
 				return null;
 			}
 
-			return {
+			const result = {
 				user: {
 					id: session.user.id,
 					email: session.user.email,
@@ -40,8 +51,10 @@ export const getSession = createServerFn({ method: "GET" }).handler(
 					emailVerified: session.user.emailVerified,
 				},
 			};
+			console.log('[getSession] Returning user:', result);
+			return result;
 		} catch (error) {
-			console.error("Session verification failed:", error);
+			console.error("[getSession] Session verification failed:", error);
 			return null;
 		}
 	},
