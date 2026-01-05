@@ -40,26 +40,20 @@ const navSections = [
     ],
     hasDivider: true,
   },
-  // Section 2: Mastra SDK
+  // Section 2: AI SDK (using @ai-sdk/react + AI Elements)
   {
     items: [
       {
-        title: 'Normal Chat',
-        url: '/agents/chat',
+        title: 'AI Chat',
+        url: '/agents/ai-chat',
         icon: ChatIcon,
-        enabled: FEATURE_CONFIG.chat,
+        enabled: FEATURE_CONFIG.aiChat,
       },
       {
-        title: 'Image Chat',
-        url: '/agents/image-chat',
-        icon: ImageIcon,
-        enabled: FEATURE_CONFIG.imageChat,
-      },
-      {
-        title: 'Workflow',
-        url: '/agents/workflow',
+        title: 'AI Workflow',
+        url: '/agents/ai-workflow',
         icon: FlowChartIcon,
-        enabled: FEATURE_CONFIG.workflow,
+        enabled: FEATURE_CONFIG.aiWorkflow,
       },
     ],
     hasDivider: true,
@@ -96,7 +90,7 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
   const resolvedUser = {
     name: user.name ?? user.email,
     email: user.email,
-    avatar: user.image ?? '/avatars/shadcn.svg',
+    avatar: user.image ?? null,
   };
 
   return (
