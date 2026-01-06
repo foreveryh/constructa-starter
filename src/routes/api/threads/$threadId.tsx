@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { eq } from 'drizzle-orm';
-import { toAISdkV5Messages } from '@mastra/ai-sdk/ui';
 
 import { db } from '~/db/client';
 import { mastra } from '~/mastra';
@@ -70,8 +69,8 @@ export const Route = createFileRoute('/api/threads/$threadId')({
             perPage: 100,
           });
 
-          // Convert to AI SDK format
-          const messages = toAISdkV5Messages(result?.messages ?? []);
+          // Return messages directly (Mastra format is compatible)
+          const messages = result?.messages ?? [];
 
           // Enrich thread with agent info
           const enrichedThread = {

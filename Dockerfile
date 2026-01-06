@@ -5,7 +5,7 @@ FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat ca-certificates
 
 # Allow Vite build to use more memory inside the builder container
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # Build-time args for Vite environment variables
 ARG VITE_WS_URL
