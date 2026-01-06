@@ -183,3 +183,108 @@ ZHIPU_API_KEY=your_api_key_here
 OPENAI_API_KEY=your_api_key_here
 OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ```
+
+---
+
+## TanStack Start 核心规则（来自 .ruler/AGENTS.md）
+
+### 数据加载规则
+1. **Fetch on navigation**：在 route loaders 中获取数据（SSR + streaming）
+2. **Server work**：通过 TanStack Start server functions 在服务端完成
+3. **URL as state**：将页面/UI 状态保持在 URL 中（typed search params）
+4. **Effects for external only**：useEffect 只用于真实的外部副作用（DOM、订阅、分析）
+5. **数据分层**：
+   - Server-synced domain data → TanStack DB collections
+   - Ephemeral UI/session → zustand 或 localStorage
+   - Derived views → render 时计算或 live queries
+
+### 服务端函数（Server Functions）最佳实践
+- RPC 风格，仅服务端可访问
+- 定义：`createServerFn(opts?).handler(async ctx => { ... })`
+- 可返回：primitives/JSON/Response
+- 支持：redirect/notFound/error
+- 在 route lifecycles 中自动处理 redirects/notFounds
+
+### 项目约束
+- ✅ 使用 pnpm
+- ✅ 所有路由文件必须是 TypeScript React (`.tsx`)
+- ✅ 使用 alias imports：`~` 解析为 `./src` 根目录
+- ❌ **禁止**更新 `.env`（应更新 `.env.example`）
+- ❌ **禁止**使用 `pnpm run dev` 或 `npm run dev` 启动
+- ❌ **禁止**创建本地 pnpm store
+
+### Hydration + Suspense 规则
+- 同步更新导致 suspend → fallback 替换 SSR 内容
+- 解决：用 `startTransition` 包装同步更新（直接 import）
+- hydration 期间避免：`useTransition` 的 `isPending`、`useSyncExternalStore` mutation
+
+---
+
+## Docker 修改规则（强制执行）
+
+### 核心文件修改前的强制检查
+
+**在对 Dockerfile、docker-compose.yml、启动脚本等核心文件做任何修改前，必须：**
+
+#### 1. 对比原始脚手架
+```bash
+# 在参考目录验证原始行为
+cd /Users/peng/Dev/Projects/ClaudeAgentChat/references/useful_frameworks/starter
+pnpm run build
+# 检查输出结构
+ls -la .output/
+```
+
+#### 2. 确认问题根源
+- 问题是否是本地修改导致的？
+- 原始脚手架是否有同样问题？
+- 如果原始版本正常，找出差异在哪里
+
+#### 3. 最小修改原则
+- 优先修复配置，而不是添加新文件
+- 优先调整参数，而不是重写逻辑
+- 优先复用现有能力（Nitro、Vite），而不是自己实现
+
+#### 4. 禁止的操作
+- ❌ 在没对比原始版本前修改 Dockerfile
+- ❌ 在没验证 index.mjs 能力前创建包装脚本
+- ❌ 在没检查 Nitro 文档前自己实现功能
+
+### 框架能力优先
+TanStack Start + Nitro 已提供的能力，**不要重新实现**：
+- ✅ 静态资源服务（Nitro 自动处理 `/assets/**`）
+- ✅ SSR 渲染
+- ✅ 路由处理
+- ✅ 中间件
+
+### 具体案例的"正确路径"
+
+**错误路径示例**（实际发生过的）：
+```
+看到 .output 不存在 → 修改 Dockerfile 复制 dist → 创建 run-server.mjs → ...
+```
+
+**正确路径**：
+```
+1. 对比原始脚手架
+   cd /Users/peng/Dev/Projects/ClaudeAgentChat/references/useful_frameworks/starter
+   pnpm run build
+   ls -la .output/  # 发现存在
+
+2. 检查当前版本为什么不同
+   git diff vite.config.ts  # 检查配置差异
+   pnpm list @tanstack/react-start  # 检查版本
+
+3. 如果版本一致，检查是否是缓存问题
+   rm -rf .output dist
+   pnpm run build
+
+4. 只有确认原始脚手架也有同样问题时，才考虑修改 Dockerfile
+```
+
+### 新文件的门槛
+创建新的核心文件（如启动脚本、包装器）前必须证明：
+- 现有方案无法解决
+- 没有框架内置功能可用
+- 已查阅相关文档
+- 已在原始脚手架验证

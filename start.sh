@@ -14,7 +14,7 @@ WS_PID=$!
 
 # Start Nitro server
 echo "Starting main server on port ${PORT:-5000}..."
-node run-server.mjs &
+node .output/server/index.mjs &
 NITRO_PID=$!
 
 # Handle shutdown

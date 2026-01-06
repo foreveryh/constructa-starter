@@ -44,8 +44,8 @@ RUN pnpm install --frozen-lockfile
 ENV NODE_ENV=production
 
 # Copy build output and runtime assets
-# TanStack Start outputs to dist/, copy to .output/ for compatibility
-COPY --from=builder /app/dist ./.output
+# TanStack Start outputs to .output/
+COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/drizzle ./drizzle
 
@@ -57,11 +57,10 @@ COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 # Non-root user (create before copying files that need correct ownership)
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
-# Copy WebSocket server, worker, startup script, and server runner
+# Copy WebSocket server, worker, and startup script
 COPY --from=builder --chown=nodejs:nodejs /app/ws-server.mjs ./ws-server.mjs
 COPY --from=builder --chown=nodejs:nodejs /app/ws-query-worker.mjs ./ws-query-worker.mjs
 COPY --from=builder --chown=nodejs:nodejs /app/start.sh ./start.sh
-COPY --from=builder --chown=nodejs:nodejs /app/run-server.mjs ./run-server.mjs
 RUN chmod +x ./start.sh
 
 # Create user sessions directory for Claude Agent
