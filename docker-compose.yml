@@ -200,9 +200,8 @@ services:
       # Authentication (Docker port mapping: 5050:5000)
       BETTER_AUTH_URL: http://localhost:5050
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
-      # Mastra Agent (GLM-4.7 via OpenAI-compatible API)
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      # Mastra Agent (Zhipu AI GLM-4.7 via Mastra built-in gateway)
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:?}
       # Claude Agent SDK configuration
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}

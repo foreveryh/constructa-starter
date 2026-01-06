@@ -1,5 +1,33 @@
 # Constructa Starter - 开发规则
 
+## 项目背景
+
+本项目基于 [constructa-starter](https://github.com/instructa/constructa-starter) 脚手架创建，该脚手架基于 **TanStack Start** 构建，提供 SSR、路由、服务端函数等现代全栈能力。
+
+### 双 SDK 架构
+
+项目集成了两套 AI Agent SDK，各有分工：
+
+| 特性 | Claude Agent SDK | Mastra AI SDK |
+|------|-----------------|---------------|
+| **主要职责** | 交互式聊天 + 代码执行 | 文件分析 + 工作流编排 |
+| **通信方式** | WebSocket（持久连接） | HTTP/SSE（请求-响应） |
+| **LLM** | Claude (Anthropic API) | 可配置（OpenAI 兼容） |
+| **执行模型** | 子进程隔离 | 进程内 |
+| **沙盒环境** | ✅ 支持（Per-Session） | ❌ 不支持 |
+| **会话恢复** | ✅ 原生支持 | ❌ 需自行实现 |
+| **文档获取** | 需通过 Web 搜索 | MCP 工具支持 |
+
+### MCP (Model Context Protocol) 状态
+
+**当前状态**: 未配置
+
+- Claude Agent SDK 原生支持 MCP，会在 session metadata 中暴露 `mcp_servers` 字段
+- Mastra SDK 的文档可通过 MCP 工具获取（如 `mastraDocs`、`mastraMigration`）
+- 项目本身暂未配置 MCP 服务器
+
+---
+
 ## 项目状态
 
 这是 Claude Agent Chat 的主项目仓库，基于 [constructa-starter](https://github.com/instructa/constructa-starter) fork 而来。
@@ -64,26 +92,115 @@ docker-compose up -d
 - 远程仓库: `origin` → https://github.com/foreveryh/constructa-starter
 - 直接在 `main` 分支开发，或创建 feature 分支后合并
 
+---
+
+## Claude Agent SDK 集成
+
+### 版本信息
+- `@anthropic-ai/claude-agent-sdk`: `^0.1.76`
+
+### 核心文件
+
+| 文件 | 职责 |
+|------|------|
+| `ws-server.mjs` | WebSocket 服务器主入口，处理认证、会话管理、进程生命周期 |
+| `ws-query-worker.mjs` | 子进程 Worker，调用 SDK 的 `query()` 函数 |
+| `src/lib/claude-agent-ws-adapter.ts` | 前端 WebSocket 适配器，将 SDK 事件转换为 Assistant UI 格式 |
+| `src/db/schema/mastra-thread.schema.ts` | Session 元数据持久化 Schema |
+
+### 架构流程
+
+```
+Frontend (Browser)
+    ↓ WebSocket (/ws/agent)
+ws-server.mjs (主进程)
+    ├─ 认证验证 (Better Auth)
+    ├─ 会话管理 (workspaceSessionId ↔ sdkSessionId 映射)
+    └─ 进程管理 (spawn/kill)
+        ↓
+ws-query-worker.mjs (子进程)
+    └─ query() from @anthropic-ai/claude-agent-sdk
+        ├─ 沙盒环境 (CLAUDE_HOME, cwd)
+        ├─ Skills 加载 (.claude/skills)
+        └─ 结构化输出 (JSON Schema)
+```
+
+### 关键配置选项
+
+```javascript
+// ws-query-worker.mjs 中的 query() 调用
+const result = await query({
+  prompt: userMessage,
+  cwd: sessionWorkspace,                    // Per-Session 工作目录
+  settingSources: ['project'],              // 加载 .claude/skills
+  tools: { preset: 'claude_code' },         // 工具集
+  systemPrompt: { preset: 'default', append: customPrompt },
+  outputFormat: { schema: jsonSchema },     // 可选：结构化输出
+  resumeSessionId: previousSdkSessionId,    // 可选：会话恢复
+});
+```
+
+### 文档获取方式
+
+Claude Agent SDK 文档相对较新，**无法通过 MCP 工具获取**，需要：
+1. 通过 Web 搜索获取最新文档
+2. 参考 `references/useful_frameworks/claude-agent-kit/` 目录下的参考实现
+3. 查看 SDK 源码和 TypeScript 类型定义
+
+### 环境变量
+
+```bash
+# Anthropic API
+ANTHROPIC_API_KEY=<your-api-key>
+ANTHROPIC_BASE_URL=<optional-base-url>
+ANTHROPIC_MODEL=<optional-model-override>
+
+# WebSocket 服务器
+WS_PORT=3001
+APP_URL=http://localhost:5000
+CLAUDE_SESSIONS_ROOT=/data/users
+ENABLE_STRUCTURED_OUTPUTS=true  # 可选
+```
+
+---
+
 ## Mastra AI SDK 集成注意事项
 
 ### 版本信息
-- `@mastra/core`: `1.0.0-beta.19` (v1 Beta 版本，API 有重大变化)
+- `@mastra/core`: `1.0.0-beta.19` (v1 Beta)
 - `@mastra/ai-sdk`: `1.0.0-beta.12` (用于 AI SDK UI 集成)
-- `ai`: Vercel AI SDK 核心包
-- `@ai-sdk/react`: Vercel AI SDK React 集成
+- `ai`: `^5.0.47` (Vercel AI SDK 核心包)
+- `@ai-sdk/react`: `^3.0.11` (Vercel AI SDK React 集成)
 
-### API 变化 (关键！)
+### 核心文件
 
-Mastra v1 Beta 的 Agent API 发生了重大变化：
+| 文件 | 职责 |
+|------|------|
+| `src/mastra/index.ts` | Mastra 实例，注册 Agent 和 Workflow |
+| `src/mastra/agents/chat-agent.ts` | Chat Agent 定义 |
+| `src/mastra/tools/*.ts` | 自定义工具（如 S3 文件获取） |
+| `src/mastra/workflows/*.ts` | 工作流定义 |
 
-| 旧 API (AI SDK v4/v1) | 新 API (AI SDK v5/v2) | 说明 |
-|---------------------|---------------------|------|
-| `stream()` | `streamLegacy()` | 仅支持 v1 模型 |
-| `generate()` | `generateLegacy()` | 仅支持 v1 模型 |
-| ~~`streamVNext()`~~ | `stream()` | 现在 `stream()` 就是新 API |
-| ~~`generateVNext()`~~ | `generate()` | 现在 `generate()` 就是新 API |
+### 文档获取方式
 
-### 正确的集成方式
+Mastra SDK 支持通过 **MCP 工具** 获取文档：
+- `mastraDocs`: 获取官方文档
+- `mastraExamples`: 获取代码示例
+- `mastraMigration`: 获取迁移指南
+- `mastraChanges`: 获取 changelog
+
+### API 变化 (v1 重要！)
+
+Mastra v1 的 Agent API 发生了重大变化：
+
+| 旧 API (v0.x) | 新 API (v1) | 说明 |
+|---------------|-------------|------|
+| `streamVNext()` | `stream()` | 标准流式 API |
+| `generateVNext()` | `generate()` | 标准生成 API |
+| `stream()` | `streamLegacy()` | 仅支持 AI SDK v4 模型 |
+| `generate()` | `generateLegacy()` | 仅支持 AI SDK v4 模型 |
+
+### 正确的集成方式 (v1)
 
 **后端 API 路由** (`/src/routes/api/chat.tsx`):
 ```typescript
@@ -95,11 +212,11 @@ export const Route = createFileRoute('/api/chat')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const body = await request.json();
+        const params = await request.json();
         const stream = await handleChatStream({
           mastra,
-          agentId: 'codebase-agent',
-          params: { messages: body.messages },
+          agentId: 'chat-agent',
+          params,
         });
         return createUIMessageStreamResponse({ stream });
       },
@@ -121,11 +238,9 @@ const { messages, sendMessage, status, regenerate } = useChat({
 
 ❌ **错误方式** - 直接使用 Agent 的流式方法：
 ```typescript
-// 这些方法不存在或返回类型不对
-agent.stream().toResponse()
-stream.toTextStreamResponse()
-agent.streamVNext()
-stream.aisdk.v5.toTextStreamResponse()
+// v1 中这些方法签名变了，不能直接这样用
+agent.streamVNext(messages)  // v1 中已改名为 stream()
+stream.toUIMessageStreamResponse()  // 不存在
 ```
 
 ✅ **正确方式** - 使用 `@mastra/ai-sdk` 的工具函数：
@@ -136,7 +251,7 @@ import { createUIMessageStreamResponse } from 'ai';
 const stream = await handleChatStream({
   mastra,
   agentId: 'your-agent-id',
-  params: { messages },
+  params,  // { messages: [...] }
 });
 return createUIMessageStreamResponse({ stream });
 ```
@@ -159,30 +274,31 @@ API 返回的 Server-Sent Events (SSE) 格式：
 
 ### GLM-4.7 模型配置
 
-使用 Zhipu AI GLM-4.7 模型时的配置：
+Mastra v1 内置智谱 AI 支持，使用 `zhipuai/` 前缀：
 
-**Agent 定义** (`/src/mastra/agents/codebase-agent.ts`):
+**Agent 定义** (`/src/mastra/agents/chat-agent.ts`):
 ```typescript
 import { Agent } from '@mastra/core/agent';
 
-export const codebaseAgent = new Agent({
-  id: 'codebase-agent',
-  name: 'codebase-agent',
+export const chatAgent = new Agent({
+  name: 'chat-agent',
   instructions: '...',
-  model: 'zhipuai/glm-4.7',  // 使用 Mastra 的 model gateway
+  model: 'zhipuai/glm-4.7',  // Mastra 内置 model gateway
   tools: { /* ... */ },
 });
 ```
 
 **环境变量** (`.env`):
 ```bash
-# Zhipu AI API Key (Mastra Gateway 使用)
+# Zhipu AI API Key (Mastra 内置网关)
 ZHIPU_API_KEY=your_api_key_here
-
-# 或使用 OpenAI 兼容格式
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ```
+
+**可用模型**：
+- `zhipuai/glm-4.5` (131K context)
+- `zhipuai/glm-4.6` (205K context)
+- `zhipuai/glm-4.7` (205K context)
+- 以及 air、flash 等轻量版本
 
 ---
 
