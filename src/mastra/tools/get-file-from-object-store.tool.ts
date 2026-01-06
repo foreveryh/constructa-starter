@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { getDefaultBucket, readObjectText } from '~/mastra/storage';
+import { getDefaultBucket, readObjectText } from './storage';
 
 const DEFAULT_MAX_BYTES = 512_000; // 500 KB cap keeps responses manageable
 
