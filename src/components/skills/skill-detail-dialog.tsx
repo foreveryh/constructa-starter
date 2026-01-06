@@ -2,7 +2,7 @@ import { FC, useState } from 'react';
 import { X, File, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import type { SkillDetail, SkillFile } from '~/server/skills/detail-types';
+import type { SkillDetail, SkillFile } from '~/claude/skills';
 
 interface SkillDetailDialogProps {
   skill: SkillDetail | null;

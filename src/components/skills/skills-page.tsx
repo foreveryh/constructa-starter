@@ -4,8 +4,7 @@ import { Search, Zap, Code, Palette, Plug, CheckCircle, Circle } from 'lucide-re
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { useSkillsStore } from '~/lib/skills-store';
-import type { SkillInfo } from '~/server/skills/types';
-import type { SkillDetail } from '~/server/skills/detail-types';
+import type { SkillInfo, SkillDetail } from '~/claude/skills';
 import { getSkillDetailFn } from '~/server/function/skills.server';
 import { SkillsSidebar } from './skills-sidebar';
 import { SkillsGrid } from './skills-grid';

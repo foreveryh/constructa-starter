@@ -2,7 +2,7 @@ import { FC } from 'react';
 import { CheckCircle, Circle, Eye } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
-import type { SkillInfo } from '~/server/skills/types';
+import type { SkillInfo } from '~/claude/skills';
 
 interface SkillCardProps {
   skill: SkillInfo;

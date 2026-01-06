@@ -5,7 +5,7 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router'
-import { getSkillsStore } from '~/server/skills/manager'
+import { getSkillsStore } from '~/claude/skills'
 
 export const Route = createFileRoute('/api/skills/store')({
   server: {

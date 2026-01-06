@@ -5,7 +5,7 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router'
-import { enableSkill } from '~/server/skills/manager'
+import { enableSkill } from '~/claude/skills'
 
 export const Route = createFileRoute('/api/skills/user/$userId/enable/$skillName')({
   server: {

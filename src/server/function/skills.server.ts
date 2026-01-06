@@ -13,10 +13,10 @@ import {
   getUserEnabledSkills,
   enableSkill,
   disableSkill,
-} from '~/server/skills/manager';
-import { getSkillDetail } from '~/server/skills/detail';
-import type { SkillInfo } from '~/server/skills/types';
-import type { SkillDetail } from '~/server/skills/detail';
+  getSkillDetail,
+  type SkillInfo,
+  type SkillDetail,
+} from '~/claude/skills';
 
 const requireUser = async () => {
   const { headers } = getRequest();

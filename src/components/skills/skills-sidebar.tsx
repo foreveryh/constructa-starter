@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import type { SkillInfo } from '~/server/skills/types';
+import type { SkillInfo } from '~/claude/skills';
 import { cn } from '~/lib/utils';
 
 interface CategoryItem {
