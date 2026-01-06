@@ -1,5 +1,5 @@
 import { Mastra } from '@mastra/core';
-import { codebaseAgent } from '~/mastra/agents/codebase-agent';
+import { chatAgent } from '~/mastra/agents/chat-agent';
 
 // Silence Mastra's telemetry warning in non-mastra-server environments.
 const globalScope = globalThis as Record<string, unknown>;
@@ -9,6 +9,6 @@ if (!globalScope['___MASTRA_TELEMETRY___']) {
 
 export const mastra = new Mastra({
   agents: {
-    'codebase-agent': codebaseAgent,
+    'chat-agent': chatAgent,
   },
 });

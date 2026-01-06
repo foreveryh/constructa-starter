@@ -27,7 +27,7 @@ export const Route = createFileRoute('/api/chat')({
           const body = await request.json();
           const { messages } = ChatPayloadSchema.parse(body);
 
-          const agent = mastra.getAgent('codebase-agent');
+          const agent = mastra.getAgent('chat-agent');
           const stream = await agent.streamVNext(messages, {
             format: 'aisdk',
             onError: ({ error }) => {
