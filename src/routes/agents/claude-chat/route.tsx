@@ -53,7 +53,7 @@ import {
   newSession,
   onSessionInit,
   checkIsQueryRunning,
-} from '~/lib/claude-agent-ws-adapter';
+} from '~/claude/adapters';
 import {
   useChatSessionStore,
   onMessagesLoaded,
