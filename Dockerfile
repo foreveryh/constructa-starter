@@ -18,14 +18,22 @@ WORKDIR /app
 
 # Install dependencies (with lockfile)
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN echo "=== Memory before pnpm install ===" && free -m && \
+    pnpm install --frozen-lockfile && \
+    echo "=== Memory after pnpm install ===" && free -m
 
 # Copy source and build
 COPY . .
 ENV NODE_ENV=production
 # Set CLAUDE_SESSIONS_ROOT at build time so Nitro knows about it
 ENV CLAUDE_SESSIONS_ROOT=/data/users
-RUN pnpm run build
+
+# Build with memory monitoring
+RUN echo "=== Memory before build ===" && free -m && \
+    echo "=== Starting Vite build (client + ssr + nitro) ===" && \
+    pnpm run build && \
+    echo "=== Memory after build ===" && free -m && \
+    echo "=== Build output size ===" && du -sh .output/
 
 # ---- Stage 2: Runtime --------------------------------------------------------
 FROM node:22-alpine AS runner
@@ -57,11 +65,11 @@ COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 # Non-root user (create before copying files that need correct ownership)
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
-# Copy WebSocket server, worker, and startup script
+# Copy WebSocket server, worker, and production startup script
 COPY --from=builder --chown=nodejs:nodejs /app/ws-server.mjs ./ws-server.mjs
 COPY --from=builder --chown=nodejs:nodejs /app/ws-query-worker.mjs ./ws-query-worker.mjs
-COPY --from=builder --chown=nodejs:nodejs /app/start.sh ./start.sh
-RUN chmod +x ./start.sh
+COPY --from=builder --chown=nodejs:nodejs /app/start-production.mjs ./start-production.mjs
+RUN chmod +x ./start-production.mjs
 
 # Create user sessions directory for Claude Agent
 RUN mkdir -p /data/users && chown -R nodejs:nodejs /data/users
@@ -78,5 +86,5 @@ ENV APP_URL=http://localhost:5000
 # Claude Agent sessions root directory
 ENV CLAUDE_SESSIONS_ROOT=/data/users
 
-# Start both servers
-CMD ["./start.sh"]
+# Start production script (runs both Nitro and WebSocket servers in same process)
+CMD ["node", "start-production.mjs"]

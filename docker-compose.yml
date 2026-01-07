@@ -198,7 +198,10 @@ services:
       MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
       # Authentication (Docker port mapping: 5050:5000)
+      # External URL for browser redirects
       BETTER_AUTH_URL: http://localhost:5050
+      # Internal URL for server-side API calls (inside container)
+      BETTER_AUTH_INTERNAL_URL: http://localhost:5000
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
       # Mastra Agent (Zhipu AI GLM-4.7 via Mastra built-in gateway)
       ZHIPU_API_KEY: ${ZHIPU_API_KEY:?}
