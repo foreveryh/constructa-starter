@@ -33,7 +33,7 @@ import {
   type PromptInputMessage,
 } from '~/components/ai-elements/prompt-input';
 import { Action, Actions } from '~/components/ai-elements/actions';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, useRef } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { Response } from '~/components/ai-elements/response';
 import { CopyIcon, RefreshCcwIcon, Bot } from 'lucide-react';
@@ -82,6 +82,9 @@ export function AISdkChat() {
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
+  // Flag to skip loading messages when auto-creating a session
+  // This prevents the race condition where loadThreadMessages overwrites the first message
+  const skipNextLoadRef = useRef(false);
 
   const { messages, sendMessage, status, regenerate, setMessages } = useChat({
     api: '/api/chat',
@@ -90,6 +93,11 @@ export function AISdkChat() {
   // Load thread messages when thread changes
   useEffect(() => {
     if (currentThreadId) {
+      // Skip loading if we just auto-created this session (first message is being sent)
+      if (skipNextLoadRef.current) {
+        skipNextLoadRef.current = false;
+        return;
+      }
       loadThreadMessages(currentThreadId);
     }
   }, [currentThreadId]);
@@ -107,7 +115,18 @@ export function AISdkChat() {
     }
   };
 
-  const handleCreateSession = async (agentId: string, title?: string) => {
+  /**
+   * Create a new session/thread.
+   * Returns the new threadId if successful, null otherwise.
+   * @param clearMessages - Whether to clear messages after creation (default: true).
+   *                        Set to false when auto-creating during first message send
+   *                        to avoid race condition with sendMessage.
+   */
+  const handleCreateSession = async (
+    agentId: string,
+    title?: string,
+    clearMessages: boolean = true
+  ): Promise<string | null> => {
     try {
       const response = await fetch('/api/threads', {
         method: 'POST',
@@ -117,14 +136,26 @@ export function AISdkChat() {
 
       if (response.ok) {
         const data = await response.json();
-        setCurrentThreadId(data.thread.threadId);
+        const newThreadId = data.thread.threadId;
+        // When auto-creating (clearMessages=false), skip the next loadThreadMessages
+        // to prevent overwriting the first message that's about to be sent
+        if (!clearMessages) {
+          skipNextLoadRef.current = true;
+        }
+        setCurrentThreadId(newThreadId);
         setCurrentAgentId(data.thread.agentId);
-        setMessages([]);
+        // Only clear messages when explicitly requested (e.g., from NewSessionModal)
+        if (clearMessages) {
+          setMessages([]);
+        }
         // Trigger sidebar refresh to show new thread
         setSidebarRefreshTrigger((prev) => prev + 1);
+        return newThreadId;
       }
+      return null;
     } catch (error) {
       console.error('[AISdkChat] Failed to create session:', error);
+      return null;
     }
   };
 
@@ -137,12 +168,29 @@ export function AISdkChat() {
     setIsNewSessionModalOpen(true);
   };
 
-  const handleSubmit = (message: PromptInputMessage) => {
+  /**
+   * Handle message submission.
+   * If no thread exists, automatically create one first (like ChatGPT).
+   */
+  const handleSubmit = async (message: PromptInputMessage) => {
     const hasText = Boolean(message.text);
     const hasAttachments = Boolean(message.files?.length);
 
     if (!(hasText || hasAttachments)) {
       return;
+    }
+
+    // Auto-create session if none exists (ChatGPT-like behavior)
+    let threadId = currentThreadId;
+    if (!threadId) {
+      // Use first message as title hint (truncated)
+      const titleHint = message.text?.slice(0, 50) || 'New Chat';
+      // Pass clearMessages=false to avoid race condition with sendMessage
+      threadId = await handleCreateSession(currentAgentId, titleHint, false);
+      if (!threadId) {
+        console.error('[AISdkChat] Failed to auto-create session');
+        return;
+      }
     }
 
     sendMessage(
@@ -154,7 +202,7 @@ export function AISdkChat() {
         // Pass agentId and threadId via request body
         body: {
           agentId: currentAgentId,
-          threadId: currentThreadId,
+          threadId: threadId,
         },
       },
     );
@@ -162,13 +210,27 @@ export function AISdkChat() {
     setInput('');
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
+  /**
+   * Handle suggestion click - auto-creates session if needed.
+   */
+  const handleSuggestionClick = async (suggestion: string) => {
+    // Auto-create session if none exists
+    let threadId = currentThreadId;
+    if (!threadId) {
+      // Pass clearMessages=false to avoid race condition with sendMessage
+      threadId = await handleCreateSession(currentAgentId, suggestion.slice(0, 50), false);
+      if (!threadId) {
+        console.error('[AISdkChat] Failed to auto-create session');
+        return;
+      }
+    }
+
     sendMessage(
       { text: suggestion },
       {
         body: {
           agentId: currentAgentId,
-          threadId: currentThreadId,
+          threadId: threadId,
         },
       },
     );
@@ -328,7 +390,7 @@ export function AISdkChat() {
               <ConversationScrollButton />
             </Conversation>
 
-            {messages.length === 0 && currentThreadId && (
+            {messages.length === 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {suggestions.map((suggestion) => (
                   <button
