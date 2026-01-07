@@ -192,20 +192,9 @@ function RouteComponent() {
   if (isDev) {
     return (
       <div className="h-full">
-        {activeArtifactId ? (
-          <div className="flex h-full">
-            <div className="w-1/3 h-full shrink-0">
-              <ClaudeChatSurface key={chatKey} />
-            </div>
-            <div className="w-2/3 h-full shrink-0 border-l">
-              <ArtifactsPanel
-                artifactId={activeArtifactId}
-                onClose={() => setActiveArtifact(null)}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full">
+        <div className="flex h-full">
+          {/* Session List - only show when no artifact */}
+          {!activeArtifactId && (
             <SessionList
               currentSessionId={currentSessionId}
               onSelectSession={handleSelectSession}
@@ -213,8 +202,12 @@ function RouteComponent() {
               isExpanded={sessionListExpanded}
               onToggleExpanded={() => setSessionListExpanded(!sessionListExpanded)}
             />
-            <div className="flex-1 h-full relative">
-              {/* Floating action buttons */}
+          )}
+
+          {/* Chat Surface - always mounted, width changes based on artifact state */}
+          <div className={activeArtifactId ? "w-1/3 h-full shrink-0" : "flex-1 h-full relative"}>
+            {/* Floating action buttons - only show when no artifact */}
+            {!activeArtifactId && (
               <div className="absolute top-4 left-4 z-10 flex gap-2">
                 <button
                   type="button"
@@ -237,10 +230,21 @@ function RouteComponent() {
                   </button>
                 )}
               </div>
-              <ClaudeChatSurface key={chatKey} />
-            </div>
+            )}
+            <ClaudeChatSurface key={chatKey} />
           </div>
-        )}
+
+          {/* Artifacts Panel - only show when artifact exists */}
+          {activeArtifactId && (
+            <div className="w-2/3 h-full shrink-0 border-l">
+              <ArtifactsPanel
+                artifactId={activeArtifactId}
+                onClose={() => setActiveArtifact(null)}
+              />
+            </div>
+          )}
+        </div>
+
         {pendingSessionSwitch && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="mx-4 max-w-md rounded-xl bg-card p-6 shadow-xl">
@@ -278,20 +282,9 @@ function RouteComponent() {
       <RedirectToSignIn />
 
       <SignedIn>
-        {activeArtifactId ? (
-          <div className="flex h-full">
-            <div className="w-1/3 h-full shrink-0">
-              <ClaudeChatSurface key={chatKey} />
-            </div>
-            <div className="w-2/3 h-full shrink-0 border-l">
-              <ArtifactsPanel
-                artifactId={activeArtifactId}
-                onClose={() => setActiveArtifact(null)}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full">
+        <div className="flex h-full">
+          {/* Session List - only show when no artifact */}
+          {!activeArtifactId && (
             <SessionList
               currentSessionId={currentSessionId}
               onSelectSession={handleSelectSession}
@@ -299,8 +292,12 @@ function RouteComponent() {
               isExpanded={sessionListExpanded}
               onToggleExpanded={() => setSessionListExpanded(!sessionListExpanded)}
             />
-            <div className="flex-1 h-full relative">
-              {/* Floating action buttons */}
+          )}
+
+          {/* Chat Surface - always mounted, width changes based on artifact state */}
+          <div className={activeArtifactId ? "w-1/3 h-full shrink-0" : "flex-1 h-full relative"}>
+            {/* Floating action buttons - only show when no artifact */}
+            {!activeArtifactId && (
               <div className="absolute top-4 left-4 z-10 flex gap-2">
                 <button
                   type="button"
@@ -323,10 +320,21 @@ function RouteComponent() {
                   </button>
                 )}
               </div>
-              <ClaudeChatSurface key={chatKey} />
-            </div>
+            )}
+            <ClaudeChatSurface key={chatKey} />
           </div>
-        )}
+
+          {/* Artifacts Panel - only show when artifact exists */}
+          {activeArtifactId && (
+            <div className="w-2/3 h-full shrink-0 border-l">
+              <ArtifactsPanel
+                artifactId={activeArtifactId}
+                onClose={() => setActiveArtifact(null)}
+              />
+            </div>
+          )}
+        </div>
+
         {pendingSessionSwitch && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="mx-4 max-w-md rounded-xl bg-card p-6 shadow-xl">
