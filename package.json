@@ -56,6 +56,8 @@
     "@iconify-json/ri": "^1.2.5",
     "@mastra/ai-sdk": "1.0.0-beta.12",
     "@mastra/core": "1.0.0-beta.19",
+    "@mastra/memory": "1.0.0-beta.10",
+    "@mastra/pg": "1.0.0-beta.11",
     "@polar-sh/better-auth": "^1.1.4",
     "@polar-sh/sdk": "^0.35.2",
     "@polar-sh/tanstack-start": "^0.1.8",
