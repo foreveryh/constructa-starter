@@ -22,7 +22,9 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
   const [isDismissed, setIsDismissed] = React.useState(false);
 
   // Check localStorage on mount (client-side only)
+  const [isClient, setIsClient] = React.useState(false);
   React.useEffect(() => {
+    setIsClient(true);
     try {
       const dismissed = localStorage.getItem(DISMISSED_KEY);
       if (dismissed === 'true') {
@@ -67,13 +69,18 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
     }
   }, [callbackURL, resendFn]);
 
-  // Use display:none instead of returning null to avoid unmounting issues
+  // Return null when dismissed to avoid wrapper div taking up space
+  // Wait for client-side hydration to avoid flash of content
+  if (isClient && isDismissed) {
+    return null;
+  }
+
   return (
-    <div
-      className="relative rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
-      style={{ display: isDismissed ? 'none' : 'block' }}
-    >
-      <button
+    <div className="px-4 pt-4 md:px-6 shrink-0">
+      <div
+        className="relative rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
+      >
+        <button
         type="button"
         onClick={handleDismiss}
         className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100"
@@ -106,6 +113,7 @@ export function EmailVerificationBanner({ email }: EmailVerificationBannerProps)
             {status === 'pending' ? 'Sending…' : 'Resend verification email'}
           </Button>
         </div>
+      </div>
       </div>
     </div>
   );

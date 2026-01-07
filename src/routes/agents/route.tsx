@@ -75,9 +75,7 @@ function RouteComponent() {
         <SiteHeader />
         <div className="flex flex-1 flex-col min-h-0">
           {!user.emailVerified ? (
-            <div className="px-4 pt-4 md:px-6 shrink-0">
-              <EmailVerificationBanner email={user.email} />
-            </div>
+            <EmailVerificationBanner email={user.email} />
           ) : null}
           <div className="@container/main flex flex-1 flex-col min-h-0 gap-2">
             <div className="flex flex-1 flex-col min-h-0 gap-4 md:gap-6 overflow-hidden">

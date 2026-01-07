@@ -8,7 +8,12 @@ export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
-    className={cn('relative flex-1 overflow-y-auto', className)}
+    className={cn(
+      'relative flex-1 overflow-y-auto',
+      // Hide scrollbar while keeping scroll functionality
+      'scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none]',
+      className
+    )}
     initial="smooth"
     resize="smooth"
     role="log"
