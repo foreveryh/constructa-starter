@@ -7,24 +7,6 @@ import Icons from 'unplugin-icons/vite';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 
-// WebSocket plugin for Agent Chat - uses standalone bootstrap to avoid path alias issues
-function agentWebSocketPlugin() {
-  return {
-    name: 'agent-websocket',
-    configureServer(server: ViteDevServer) {
-      // Return a post hook that runs after Vite server is fully ready
-      return () => {
-        // Lazy import the standalone bootstrap file
-        import('./src/server/ws-bootstrap.ts').then(({ createAgentWebSocketServer }) => {
-          createAgentWebSocketServer(server.httpServer);
-        }).catch(err => {
-          console.error('[WS Plugin] Failed to load WebSocket server:', err);
-        });
-      };
-    },
-  };
-}
-
 export default ({ mode }: ConfigEnv) => {
   // Regression in TanStack Start RC1: loadEnv now keeps the VITE_ prefix, so we
   // manually clear the prefix until upstream restores the previous behaviour.
@@ -36,14 +18,22 @@ export default ({ mode }: ConfigEnv) => {
       allowedHosts: ['db15f87f452b.ngrok-free.app'],
     },
     ssr: {
-      // Ensure Node-y Mastra stays external to avoid bundling issues
-      noExternal: ['@mastra/*'],
+      // Externalize pg and @mastra/pg to avoid ESM/CJS interop TDZ errors
+      // The 'pg' package is CommonJS, and bundling it causes "Cannot access 'pg' before initialization"
+      external: ['pg', '@mastra/pg'],
+    },
+    build: {
+      rollupOptions: {
+        // Exclude standalone scripts from the build (they have shebangs that break esbuild)
+        external: [/ws-server\.mjs$/, /ws-query-worker\.mjs$/],
+      },
     },
     plugins: [
       tsConfigPaths({
         projects: ['./tsconfig.json'],
       }),
-      agentWebSocketPlugin(), // Agent WebSocket server
+      // WebSocket server: handled by Nitro plugin (server/plugins/websocket.mjs)
+      // Dev mode: start manually with "node ws-server.mjs"
       tanstackStart(),
       nitro(),
       viteReact(),

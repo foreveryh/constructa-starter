@@ -36,13 +36,77 @@ const config = {
   cwd: process.cwd(),
 };
 
-// Handle uncaught errors
+// Handle uncaught errors with detailed logging and flush
 process.on('uncaughtException', (err) => {
-  console.error('[WS Server] UNCAUGHT EXCEPTION:', err);
+  console.error('==========================================');
+  console.error('[WS Server] UNCAUGHT EXCEPTION DETECTED');
+  console.error('[WS Server] Error:', err);
+  console.error('[WS Server] Stack:', err.stack);
+  console.error('[WS Server] Type:', err.constructor.name);
+  console.error('==========================================');
+
+  // Force flush console output
+  if (process.stdout.write('')) {
+    process.stdout.once('drain', () => {
+      console.error('[WS Server] Console flushed, exiting with code 1');
+      process.exit(1);
+    });
+  } else {
+    // If buffer is full, wait a bit then exit
+    setTimeout(() => {
+      console.error('[WS Server] Force exit after exception');
+      process.exit(1);
+    }, 100);
+  }
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('[WS Server] UNHANDLED REJECTION:', reason);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('==========================================');
+  console.error('[WS Server] UNHANDLED REJECTION DETECTED');
+  console.error('[WS Server] Reason:', reason);
+  console.error('[WS Server] Promise:', promise);
+  if (reason instanceof Error) {
+    console.error('[WS Server] Stack:', reason.stack);
+  }
+  console.error('==========================================');
+
+  // Force flush console output
+  if (process.stdout.write('')) {
+    process.stdout.once('drain', () => {
+      console.error('[WS Server] Console flushed, exiting with code 1');
+      process.exit(1);
+    });
+  } else {
+    setTimeout(() => {
+      console.error('[WS Server] Force exit after rejection');
+      process.exit(1);
+    }, 100);
+  }
+});
+
+// Track process exit
+process.on('exit', (code) => {
+  console.error('[WS Server] ========== PROCESS EXIT ==========');
+  console.error('[WS Server] Exit code:', code);
+  console.error('[WS Server] ===============================');
+});
+
+process.on('SIGTERM', () => {
+  console.error('[WS Server] ========== RECEIVED SIGTERM ==========');
+  console.error('[WS Server] Process will be terminated');
+  console.error('[WS Server] ================================');
+});
+
+process.on('SIGINT', () => {
+  console.error('[WS Server] ========== RECEIVED SIGINT ==========');
+  console.error('[WS Server] Process will be interrupted');
+  console.error('[WS Server] ===============================');
+});
+
+process.on('SIGHUP', () => {
+  console.error('[WS Server] ========== RECEIVED SIGHUP ==========');
+  console.error('[WS Server] Terminal disconnected signal');
+  console.error('[WS Server] ===============================');
 });
 
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
@@ -516,23 +580,55 @@ async function handleChat(ws, prompt, resumeSessionId) {
 
     // Handle worker exit
     worker.on('close', (code, signal) => {
-      if (signal) {
-        // Killed by signal (e.g., abort) - this is expected
-        console.log(`[WS Server] Worker killed by signal ${signal}`);
-      } else if (code !== 0 && code !== null) {
-        console.error(`[WS Server] Worker exited with code ${code}`);
+      try {
+        console.log('[WS Server] ========== WORKER CLOSE EVENT ==========');
+        console.log('[WS Server] Worker PID:', worker.pid);
+        console.log('[WS Server] Exit code:', code);
+        console.log('[WS Server] Signal:', signal);
+        console.log('[WS Server] User ID:', ws.userId);
+
+        if (signal) {
+          // Killed by signal (e.g., abort) - this is expected
+          console.log(`[WS Server] Worker killed by signal ${signal} (expected)`);
+        } else if (code !== 0 && code !== null) {
+          console.error(`[WS Server] Worker exited with non-zero code ${code}`);
+        } else {
+          console.log('[WS Server] Worker exited normally');
+        }
+
+        ws.workerProcess = null;
+        console.log('[WS Server] Worker process reference cleared');
+        console.log('[WS Server] ============================================');
+      } catch (closeError) {
+        console.error('[WS Server] ========== ERROR IN WORKER CLOSE HANDLER ==========');
+        console.error('[WS Server] Close handler error:', closeError);
+        console.error('[WS Server] Close handler stack:', closeError.stack);
+        console.error('[WS Server] ==================================================');
       }
-      ws.workerProcess = null;
     });
 
     worker.on('error', (error) => {
-      console.error('[WS Server] Worker error:', error);
-      sendMessage(ws, {
-        type: 'error',
-        code: 'worker_spawn_error',
-        message: error.message,
-        retriable: true,
-      });
+      try {
+        console.error('[WS Server] ========== WORKER ERROR EVENT ==========');
+        console.error('[WS Server] Worker PID:', worker.pid);
+        console.error('[WS Server] Error:', error);
+        console.error('[WS Server] Error stack:', error.stack);
+        console.error('[WS Server] Error type:', error.constructor.name);
+        console.error('[WS Server] User ID:', ws.userId);
+        console.error('[WS Server] ===========================================');
+
+        sendMessage(ws, {
+          type: 'error',
+          code: 'worker_spawn_error',
+          message: error.message,
+          retriable: true,
+        });
+      } catch (errorHandlerError) {
+        console.error('[WS Server] ========== ERROR IN WORKER ERROR HANDLER ==========');
+        console.error('[WS Server] Error handler error:', errorHandlerError);
+        console.error('[WS Server] Error handler stack:', errorHandlerError.stack);
+        console.error('[WS Server] =========================================================');
+      }
     });
 
   } catch (error) {
@@ -550,9 +646,10 @@ async function handleChat(ws, prompt, resumeSessionId) {
  * Handle incoming WebSocket message
  */
 async function handleMessage(ws, msg) {
-  console.log(`[WS Server] Received message from ${ws.userId}:`, msg.toString().substring(0, 200));
-  const message = JSON.parse(msg);
-  console.log(`[WS Server] Parsed message type: ${message.type}`);
+  try {
+    console.log(`[WS Server] Received message from ${ws.userId}:`, msg.toString().substring(0, 200));
+    const message = JSON.parse(msg);
+    console.log(`[WS Server] Parsed message type: ${message.type}`);
 
   switch (message.type) {
     case 'chat':
@@ -622,32 +719,93 @@ async function handleMessage(ws, msg) {
       break;
 
     case 'abort':
-      ws.abortController?.abort('user_interrupt');
-      // Gracefully terminate worker process if running
-      if (ws.workerProcess) {
-        const worker = ws.workerProcess;
-        console.log('[WS Server] Aborting worker process');
+      console.log('[WS Server] ========== ABORT REQUEST START ==========');
+      console.log('[WS Server] User ID:', ws.userId);
+      console.log('[WS Server] Has worker process:', !!ws.workerProcess);
+      console.log('[WS Server] Worker PID:', ws.workerProcess?.pid);
 
-        // Send SIGTERM first (graceful shutdown)
-        worker.kill('SIGTERM');
+      try {
+        // Abort the controller if it exists
+        if (ws.abortController) {
+          console.log('[WS Server] Aborting controller');
+          ws.abortController.abort('user_interrupt');
+        }
 
-        // Set up a timeout to force kill if worker doesn't exit
-        const forceKillTimeout = setTimeout(() => {
-          if (ws.workerProcess === worker) {
-            console.log('[WS Server] Force killing unresponsive worker');
-            worker.kill('SIGKILL');
+        // Gracefully terminate worker process if running
+        if (ws.workerProcess) {
+          const worker = ws.workerProcess;
+          console.log('[WS Server] Attempting to kill worker process');
+
+          try {
+            // Send SIGTERM first (graceful shutdown)
+            worker.kill('SIGTERM');
+            console.log('[WS Server] SIGTERM sent successfully');
+          } catch (killError) {
+            console.error('[WS Server] Error sending SIGTERM:', killError);
+            console.error('[WS Server] Kill error stack:', killError.stack);
           }
-        }, 2000);
 
-        // Clear the timeout when worker exits
-        worker.once('close', () => {
-          clearTimeout(forceKillTimeout);
-          // Notify client that abort completed
+          // Set up a timeout to force kill if worker doesn't exit
+          const forceKillTimeout = setTimeout(() => {
+            try {
+              if (ws.workerProcess === worker) {
+                console.log('[WS Server] Worker did not exit, force killing');
+                worker.kill('SIGKILL');
+                console.log('[WS Server] SIGKILL sent successfully');
+              }
+            } catch (forceKillError) {
+              console.error('[WS Server] Error sending SIGKILL:', forceKillError);
+              console.error('[WS Server] Force kill error stack:', forceKillError.stack);
+            }
+          }, 2000);
+
+          // Clear the timeout when worker exits
+          try {
+            worker.once('close', (code, signal) => {
+              try {
+                console.log('[WS Server] Worker closed - code:', code, 'signal:', signal);
+                clearTimeout(forceKillTimeout);
+                console.log('[WS Server] Force kill timeout cleared');
+
+                // Notify client that abort completed
+                console.log('[WS Server] Sending aborted message to client');
+                sendMessage(ws, { type: 'aborted' });
+                console.log('[WS Server] Aborted message sent successfully');
+              } catch (closeHandlerError) {
+                console.error('[WS Server] Error in worker close handler:', closeHandlerError);
+                console.error('[WS Server] Close handler error stack:', closeHandlerError.stack);
+              }
+            });
+            console.log('[WS Server] Worker close listener attached');
+          } catch (listenerError) {
+            console.error('[WS Server] Error attaching close listener:', listenerError);
+            console.error('[WS Server] Listener error stack:', listenerError.stack);
+          }
+        } else {
+          // No worker to abort, just acknowledge
+          console.log('[WS Server] No worker process, sending aborted immediately');
           sendMessage(ws, { type: 'aborted' });
-        });
-      } else {
-        // No worker to abort, just acknowledge
-        sendMessage(ws, { type: 'aborted' });
+        }
+
+        console.log('[WS Server] ========== ABORT REQUEST END ==========');
+      } catch (abortError) {
+        console.error('[WS Server] ========== ABORT ERROR ==========');
+        console.error('[WS Server] Abort handler caught exception:', abortError);
+        console.error('[WS Server] Abort error stack:', abortError.stack);
+        console.error('[WS Server] Abort error type:', abortError.constructor.name);
+        console.error('[WS Server] =====================================');
+
+        // Try to send error message to client
+        try {
+          sendMessage(ws, {
+            type: 'error',
+            code: 'abort_failed',
+            message: `Abort failed: ${abortError.message}`,
+            retriable: false,
+          });
+        } catch (sendError) {
+          console.error('[WS Server] Failed to send abort error to client:', sendError);
+        }
       }
       break;
 
@@ -663,20 +821,46 @@ async function handleMessage(ws, msg) {
         retriable: false,
       });
   }
+  } catch (handleMessageError) {
+    console.error('[WS Server] ========== HANDLE MESSAGE ERROR ==========');
+    console.error('[WS Server] Error handling message:', handleMessageError);
+    console.error('[WS Server] Error stack:', handleMessageError.stack);
+    console.error('[WS Server] Error type:', handleMessageError.constructor.name);
+    console.error('[WS Server] Message preview:', msg.toString().substring(0, 500));
+    console.error('[WS Server] User ID:', ws.userId);
+    console.error('[WS Server] ==================================================');
+
+    // Try to send error message to client
+    try {
+      sendMessage(ws, {
+        type: 'error',
+        code: 'message_handler_error',
+        message: `Failed to handle message: ${handleMessageError.message}`,
+        retriable: false,
+      });
+    } catch (sendError) {
+      console.error('[WS Server] Failed to send error to client:', sendError);
+    }
+  }
 }
 
-// Create HTTP server for WebSocket
-const httpServer = http.createServer((req, res) => {
-  // Health check endpoint
-  if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
-    return;
-  }
+/**
+ * Start WebSocket server for Claude Agent Chat
+ * Can be called from Nitro plugin or run standalone
+ */
+export function startWebSocketServer(port = WS_PORT) {
+  // Create HTTP server for WebSocket
+  const httpServer = http.createServer((req, res) => {
+    // Health check endpoint
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
 
-  res.writeHead(426, { 'Content-Type': 'text/plain' });
-  res.end('WebSocket connection required');
-});
+    res.writeHead(426, { 'Content-Type': 'text/plain' });
+    res.end('WebSocket connection required');
+  });
 
 // Create WebSocket server
 const wss = new WebSocketServer({ server: httpServer, path: '/ws/agent' });
@@ -773,9 +957,21 @@ wss.on('close', () => {
   clearInterval(heartbeat);
 });
 
-// Start server
-httpServer.listen(WS_PORT, () => {
-  console.log(`[WS Server] WebSocket server running on port ${WS_PORT}`);
-  console.log(`[WS Server] Authenticating against ${APP_URL}`);
-  console.log(`[WS Server] Sessions root: ${SESSIONS_ROOT}`);
-});
+  // Start server
+  httpServer.listen(port, () => {
+    console.log(`[WS Server] WebSocket server running on port ${port}`);
+    console.log(`[WS Server] Authenticating against ${APP_URL}`);
+    console.log(`[WS Server] Sessions root: ${SESSIONS_ROOT}`);
+  });
+
+  return { httpServer, wss };
+}
+
+// Run as standalone script when executed directly
+if (import.meta.url.startsWith('file:')) {
+  const modulePath = fileURLToPath(import.meta.url);
+  if (process.argv[1] === modulePath) {
+    console.log('[WS Server] Starting standalone WebSocket server...');
+    startWebSocketServer();
+  }
+}
