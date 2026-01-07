@@ -33,6 +33,8 @@ interface SessionSidebarProps {
   onThreadSelect: (threadId: string, agentId: string) => void;
   onNewThread: () => void;
   className?: string;
+  /** Increment this to trigger a refresh of the thread list */
+  refreshTrigger?: number;
 }
 
 export function SessionSidebar({
@@ -40,14 +42,15 @@ export function SessionSidebar({
   onThreadSelect,
   onNewThread,
   className,
+  refreshTrigger,
 }: SessionSidebarProps) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load threads from API
+  // Load threads from API on mount and when refreshTrigger changes
   useEffect(() => {
     loadThreads();
-  }, []);
+  }, [refreshTrigger]);
 
   const loadThreads = async () => {
     try {

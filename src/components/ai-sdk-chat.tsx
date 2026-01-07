@@ -81,6 +81,7 @@ export function AISdkChat() {
   const [currentAgentId, setCurrentAgentId] = useState<string>('assistant-agent');
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
 
   const { messages, sendMessage, status, regenerate, setMessages } = useChat({
     api: '/api/chat',
@@ -119,6 +120,8 @@ export function AISdkChat() {
         setCurrentThreadId(data.thread.threadId);
         setCurrentAgentId(data.thread.agentId);
         setMessages([]);
+        // Trigger sidebar refresh to show new thread
+        setSidebarRefreshTrigger((prev) => prev + 1);
       }
     } catch (error) {
       console.error('[AISdkChat] Failed to create session:', error);
@@ -182,6 +185,7 @@ export function AISdkChat() {
             currentThreadId={currentThreadId}
             onThreadSelect={handleThreadSelect}
             onNewThread={handleNewThread}
+            refreshTrigger={sidebarRefreshTrigger}
           />
         </div>
       )}
