@@ -105,8 +105,9 @@ docker-compose up -d
 |------|------|
 | `ws-server.mjs` | WebSocket 服务器主入口，处理认证、会话管理、进程生命周期 |
 | `ws-query-worker.mjs` | 子进程 Worker，调用 SDK 的 `query()` 函数 |
-| `src/lib/claude-agent-ws-adapter.ts` | 前端 WebSocket 适配器，将 SDK 事件转换为 Assistant UI 格式 |
-| `src/db/schema/mastra-thread.schema.ts` | Session 元数据持久化 Schema |
+| `src/claude/adapters/ws-adapter.ts` | 前端 WebSocket 适配器，将 SDK 事件转换为 Assistant UI 格式 |
+| `src/db/schema/agent-session.schema.ts` | Session 元数据持久化 Schema (claudeHomePath, sdkSessionId 等) |
+| `src/db/schema/session-document.schema.ts` | Session 文档关联 Schema (workspace knowledge-base) |
 
 ### 架构流程
 
