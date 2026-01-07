@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { db } from '~/db/client';
+import { mastra } from '~/mastra';
 import { mastraThread } from '~/db/schema';
 import { AGENTS } from '~/db/schema/_shared';
 
@@ -14,8 +15,10 @@ export const Route = createFileRoute('/api/threads/')({
       GET: async ({ request }) => {
         try {
           // Get user from session
+          // Use internal URL for server-side calls (Docker: localhost:5000 inside container)
+          const authBaseUrl = process.env.BETTER_AUTH_INTERNAL_URL || process.env.BETTER_AUTH_URL;
           const cookie = request.headers.get('cookie') || '';
-          const authResponse = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/get-session`, {
+          const authResponse = await fetch(`${authBaseUrl}/api/auth/get-session`, {
             headers: { cookie },
           });
 
@@ -66,8 +69,9 @@ export const Route = createFileRoute('/api/threads/')({
       // POST /api/threads - Create a new thread
       POST: async ({ request }) => {
         try {
+          const authBaseUrl = process.env.BETTER_AUTH_INTERNAL_URL || process.env.BETTER_AUTH_URL;
           const cookie = request.headers.get('cookie') || '';
-          const authResponse = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/get-session`, {
+          const authResponse = await fetch(`${authBaseUrl}/api/auth/get-session`, {
             headers: { cookie },
           });
 
@@ -102,7 +106,24 @@ export const Route = createFileRoute('/api/threads/')({
           // Generate unique threadId for Mastra Memory
           const threadId = `thread_${nanoid()}`;
 
-          // Create thread record
+          // Create thread in Mastra Memory first
+          const agent = mastra.getAgent('chat-agent');
+          const memory = await agent.getMemory();
+
+          if (memory) {
+            try {
+              await memory.createThread({
+                threadId,
+                resourceId: userId,
+                title: title || 'New Chat',
+              });
+            } catch (err) {
+              console.warn('[API /api/threads] Mastra createThread failed:', err);
+              // Continue anyway - local DB is the source of truth
+            }
+          }
+
+          // Create thread record in local database
           const [newThread] = await db
             .insert(mastraThread)
             .values({

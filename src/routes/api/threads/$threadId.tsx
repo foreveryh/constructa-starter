@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { eq } from 'drizzle-orm';
+import { toAISdkV5Messages } from '@mastra/ai-sdk/ui';
 
 import { db } from '~/db/client';
 import { mastra } from '~/mastra';
@@ -15,8 +16,9 @@ export const Route = createFileRoute('/api/threads/$threadId')({
           const { threadId } = params;
           const cookie = request.headers.get('cookie') || '';
 
-          // Authenticate user
-          const authResponse = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/get-session`, {
+          // Authenticate user (use internal URL for server-side calls)
+          const authBaseUrl = process.env.BETTER_AUTH_INTERNAL_URL || process.env.BETTER_AUTH_URL;
+          const authResponse = await fetch(`${authBaseUrl}/api/auth/get-session`, {
             headers: { cookie },
           });
 
@@ -59,18 +61,24 @@ export const Route = createFileRoute('/api/threads/$threadId')({
             });
           }
 
-          // Get messages from Mastra Memory
-          const storage = mastra.getStorage();
-          const memoryStore = await storage.getStore('memory');
+          // Get messages from Agent Memory
+          const agent = mastra.getAgent('chat-agent');
+          const memory = await agent.getMemory();
 
-          const result = await memoryStore?.listMessages({
-            threadId: thread.threadId,
-            page: 0,
-            perPage: 100,
-          });
-
-          // Return messages directly (Mastra format is compatible)
-          const messages = result?.messages ?? [];
+          let messages: unknown[] = [];
+          if (memory) {
+            try {
+              const result = await memory.recall({
+                threadId: thread.threadId,
+                perPage: false, // Fetch all messages
+              });
+              // Convert Mastra Memory format to AI SDK v5 UI message format
+              // This ensures compatibility with useChat() and message.parts rendering
+              messages = toAISdkV5Messages(result.messages ?? []);
+            } catch (err) {
+              console.warn('[API /api/threads/:threadId] Memory recall failed:', err);
+            }
+          }
 
           // Enrich thread with agent info
           const enrichedThread = {
@@ -82,7 +90,7 @@ export const Route = createFileRoute('/api/threads/$threadId')({
             JSON.stringify({
               thread: enrichedThread,
               messages,
-              total: result?.total || 0,
+              total: messages.length,
             }),
             {
               status: 200,

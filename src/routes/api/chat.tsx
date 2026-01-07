@@ -9,7 +9,19 @@ export const Route = createFileRoute('/api/chat')({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const params = await request.json();
+          const body = await request.json();
+
+          // Extract memory config from request body
+          // Frontend can pass: { messages, memory: { thread, resource } }
+          // Or legacy format: { messages, threadId }
+          const { messages, memory, threadId, resourceId } = body;
+
+          // Build params with memory configuration
+          const params = {
+            messages,
+            // Support both new format (memory.thread) and legacy format (threadId)
+            memory: memory || (threadId ? { thread: threadId, resource: resourceId || 'default-user' } : undefined),
+          };
 
           const stream = await handleChatStream({
             mastra,
