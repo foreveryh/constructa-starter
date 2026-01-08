@@ -1,11 +1,16 @@
 /**
- * AI Workflow Hub
+ * PR Creator Workflow Page
  *
- * Workflow 列表页面和 Workflow 执行页面的集成。
- * 使用 search params (?workflow=pr-creator) 来控制显示哪个 workflow。
+ * 多步骤的 PR 稿件创作流程：
+ * 1. 输入 Brief 和 Facts
+ * 2. AI 分析并提出澄清问题
+ * 3. 用户回答问题
+ * 4. AI 生成稿件
+ * 5. 审批/修改
+ * 6. 最终输出
  */
 
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { AuthLoading, RedirectToSignIn, SignedIn } from '@daveyplate/better-auth-ui';
 import { useState, useCallback } from 'react';
 import {
@@ -20,17 +25,9 @@ import {
   Copy,
   Download,
   RotateCcw,
-  Sparkles,
-  FileCheck,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
@@ -46,201 +43,12 @@ import { Alert, AlertDescription } from '~/components/ui/alert';
 import { Separator } from '~/components/ui/separator';
 import { cn } from '~/lib/utils';
 
-// Search params validation
-const workflowSearchSchema = {
-  workflow: undefined as string | undefined,
-};
-
-export const Route = createFileRoute('/agents/ai-workflow')({
-  validateSearch: (search: Record<string, unknown>) => ({
-    workflow: (search.workflow as string) || undefined,
-  }),
+export const Route = createFileRoute('/agents/ai-workflow/pr-creator')({
   component: RouteComponent,
 });
 
-function RouteComponent() {
-  const { workflow } = Route.useSearch();
-
-  return (
-    <div className="container mx-auto h-full px-4 py-6">
-      <AuthLoading>
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          正在检查登录状态…
-        </div>
-      </AuthLoading>
-
-      <RedirectToSignIn />
-
-      <SignedIn>
-        {workflow === 'pr-creator' ? <PRCreatorWorkflow /> : <WorkflowHub />}
-      </SignedIn>
-    </div>
-  );
-}
-
 // ============================================================================
-// Workflow Hub (List View)
-// ============================================================================
-
-interface WorkflowDefinition {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  status: 'active' | 'coming-soon' | 'beta';
-  tags: string[];
-}
-
-const workflows: WorkflowDefinition[] = [
-  {
-    id: 'pr-creator',
-    name: 'PR Creator',
-    description:
-      '智能 PR 稿件创作工作流。输入 Brief 和 Facts，AI 分析并提出澄清问题，最终生成专业的公关稿件。',
-    icon: FileText,
-    status: 'beta',
-    tags: ['AI 写作', '公关稿件', '内容生成'],
-  },
-  {
-    id: 'file-summary',
-    name: 'File Summary',
-    description: '分析文件内容，提取关键信息和统计数据。支持多种文件格式。',
-    icon: FileCheck,
-    status: 'coming-soon',
-    tags: ['文件分析', '数据提取'],
-  },
-];
-
-function WorkflowHub() {
-  const navigate = useNavigate();
-
-  const handleSelectWorkflow = (workflowId: string) => {
-    navigate({
-      to: '/agents/ai-workflow',
-      search: { workflow: workflowId },
-    });
-  };
-
-  return (
-    <div className="flex h-full flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">AI Workflow</h1>
-        <p className="text-muted-foreground">
-          选择一个工作流开始创作。每个工作流都是一个多步骤的智能流程。
-        </p>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {workflows.map((workflow) => (
-          <WorkflowCard
-            key={workflow.id}
-            workflow={workflow}
-            onSelect={() => handleSelectWorkflow(workflow.id)}
-          />
-        ))}
-
-        <Card className="border-dashed opacity-60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted-foreground">
-              <Sparkles className="h-5 w-5" />
-              更多工作流
-            </CardTitle>
-            <CardDescription>更多智能工作流即将推出…</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              我们正在开发更多场景化的工作流，包括市场分析、竞品研究、内容改写等。
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function WorkflowCard({
-  workflow,
-  onSelect,
-}: {
-  workflow: WorkflowDefinition;
-  onSelect: () => void;
-}) {
-  const Icon = workflow.icon;
-  const isDisabled = workflow.status === 'coming-soon';
-
-  return (
-    <Card
-      className={`group relative transition-all hover:shadow-md ${
-        isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-      }`}
-    >
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Icon className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-lg">{workflow.name}</CardTitle>
-              <StatusBadge status={workflow.status} />
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <CardDescription className="line-clamp-2">{workflow.description}</CardDescription>
-
-        <div className="flex flex-wrap gap-1">
-          {workflow.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-
-        {!isDisabled && (
-          <Button className="w-full" onClick={onSelect}>
-            开始使用
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
-
-        {isDisabled && (
-          <Button disabled className="w-full">
-            即将推出
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function StatusBadge({ status }: { status: WorkflowDefinition['status'] }) {
-  switch (status) {
-    case 'active':
-      return (
-        <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-          可用
-        </Badge>
-      );
-    case 'beta':
-      return (
-        <Badge variant="outline" className="text-xs text-blue-600 border-blue-200 bg-blue-50">
-          Beta
-        </Badge>
-      );
-    case 'coming-soon':
-      return (
-        <Badge variant="outline" className="text-xs text-gray-500">
-          即将推出
-        </Badge>
-      );
-  }
-}
-
-// ============================================================================
-// PR Creator Workflow
+// Types
 // ============================================================================
 
 type WorkflowStep = 'input' | 'analyzing' | 'clarify' | 'generating' | 'review' | 'done';
@@ -285,9 +93,29 @@ interface PRDraft {
   keyMessages: string[];
 }
 
-function PRCreatorWorkflow() {
-  const navigate = useNavigate();
+// ============================================================================
+// Main Component
+// ============================================================================
 
+function RouteComponent() {
+  return (
+    <div className="container mx-auto h-full px-4 py-6">
+      <AuthLoading>
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          正在检查登录状态…
+        </div>
+      </AuthLoading>
+
+      <RedirectToSignIn />
+
+      <SignedIn>
+        <PRCreatorWorkflow />
+      </SignedIn>
+    </div>
+  );
+}
+
+function PRCreatorWorkflow() {
   // Workflow state
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('input');
   const [runId, setRunId] = useState<string | null>(null);
@@ -314,32 +142,39 @@ function PRCreatorWorkflow() {
   const [draft, setDraft] = useState<PRDraft | null>(null);
   const [fullText, setFullText] = useState<string>('');
 
-  const handleBack = () => {
-    navigate({ to: '/agents/ai-workflow', search: { workflow: undefined } });
-  };
-
   // Start workflow
   const handleStartWorkflow = useCallback(async () => {
+    console.log('[pr-creator:frontend] Starting workflow...');
     setCurrentStep('analyzing');
     setError(null);
 
     try {
+      const requestBody = {
+        brief,
+        facts: {
+          ...facts,
+          keyFacts: facts.keyFacts.filter((f) => f.trim()),
+          quotes: facts.quotes.filter((q) => q.trim()),
+          data: facts.data.filter((d) => d.trim()),
+        },
+        additionalNotes,
+      };
+      console.log('[pr-creator:frontend] Request body:', requestBody);
+
+      const startTime = Date.now();
+      console.log('[pr-creator:frontend] Calling /api/workflow/pr-creator/start...');
+
       const response = await fetch('/api/workflow/pr-creator/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brief,
-          facts: {
-            ...facts,
-            keyFacts: facts.keyFacts.filter((f) => f.trim()),
-            quotes: facts.quotes.filter((q) => q.trim()),
-            data: facts.data.filter((d) => d.trim()),
-          },
-          additionalNotes,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log(`[pr-creator:frontend] Response received in ${Date.now() - startTime}ms`);
+      console.log('[pr-creator:frontend] Response status:', response.status);
+
       const result = await response.json();
+      console.log('[pr-creator:frontend] Response data:', result);
 
       if (!response.ok) {
         throw new Error(result.error || '启动工作流失败');
@@ -347,9 +182,10 @@ function PRCreatorWorkflow() {
 
       setRunId(result.runId);
 
-      // API 返回 suspendPayload（通过 result.steps[stepId].suspendPayload 获取）
-      // suspendPayload 的结构由 workflow step 的 suspendSchema 定义
+      // 注意：API 返回 suspendPayload，不是 suspendedData
       if (result.status === 'suspended' && result.suspendPayload) {
+        console.log('[pr-creator:frontend] Workflow suspended, parsing suspendPayload...');
+        // Workflow suspended for clarification
         setAnalysis({
           strengths: result.suspendPayload.analysis?.strengths || [],
           gaps: result.suspendPayload.analysis?.gaps || [],
@@ -359,11 +195,16 @@ function PRCreatorWorkflow() {
         });
         setCurrentStep('clarify');
       } else if (result.status === 'success') {
+        console.log('[pr-creator:frontend] Workflow succeeded directly');
+        // Direct to draft (no clarification needed)
         setDraft(result.result?.draft);
         setFullText(result.result?.fullText || '');
         setCurrentStep('review');
+      } else {
+        console.log('[pr-creator:frontend] Unexpected status:', result.status);
       }
     } catch (err) {
+      console.error('[pr-creator:frontend] Error:', err);
       setError(err instanceof Error ? err.message : '发生未知错误');
       setCurrentStep('input');
     }
@@ -393,8 +234,9 @@ function PRCreatorWorkflow() {
         throw new Error(result.error || '继续工作流失败');
       }
 
-      // suspendPayload 包含 human-review step 暂停时传递的数据（draft）
       if (result.status === 'suspended' && result.suspendedStep === 'human-review') {
+        // Workflow suspended for review
+        // 注意：API 返回 suspendPayload，不是 suspendedData
         setDraft(result.suspendPayload?.draft);
         setCurrentStep('review');
       } else if (result.status === 'success') {
@@ -432,9 +274,8 @@ function PRCreatorWorkflow() {
         throw new Error(result.error || '继续工作流失败');
       }
 
-      // suspendPayload 包含 human-review step 暂停时传递的数据（draft）
       if (result.status === 'suspended' && result.suspendedStep === 'human-review') {
-        setDraft(result.suspendPayload?.draft);
+        setDraft(result.suspendedData?.draft);
         setCurrentStep('review');
       } else if (result.status === 'success') {
         setDraft(result.result?.draft);
@@ -507,8 +348,10 @@ function PRCreatorWorkflow() {
     <div className="flex h-full flex-col gap-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
-          <ArrowLeft className="h-4 w-4" />
+        <Button variant="ghost" size="icon" asChild>
+          <Link to="/agents/ai-workflow" search={{ workflow: undefined }}>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
         </Button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">PR Creator</h1>
@@ -584,15 +427,13 @@ function StepIndicator({ currentStep }: { currentStep: WorkflowStep }) {
 
     if (currentStep === 'done') return 'completed';
     if (stepId === 'input' && currentIndex > 0) return 'completed';
-    if (stepId === 'clarify' && currentIndex >= order.indexOf('generating')) return 'completed';
+    if (stepId === 'clarify' && (currentIndex >= order.indexOf('generating'))) return 'completed';
     // 'review' step 在 'done' 时完成，但 'done' 已在上面处理
     if (stepId === 'review' && currentIndex >= order.indexOf('done')) return 'completed';
 
     if (stepId === 'input' && currentIndex === 0) return 'current';
-    if (stepId === 'clarify' && (currentStep === 'analyzing' || currentStep === 'clarify'))
-      return 'current';
-    if (stepId === 'review' && (currentStep === 'generating' || currentStep === 'review'))
-      return 'current';
+    if (stepId === 'clarify' && (currentStep === 'analyzing' || currentStep === 'clarify')) return 'current';
+    if (stepId === 'review' && (currentStep === 'generating' || currentStep === 'review')) return 'current';
 
     return 'pending';
   };
@@ -772,10 +613,7 @@ function InputStep({
               onChange={(e) =>
                 setBrief({
                   ...brief,
-                  targetMedia: e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
+                  targetMedia: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
                 })
               }
               placeholder="例如：科技媒体, 财经媒体, 大众媒体"
@@ -854,11 +692,7 @@ function InputStep({
                   placeholder={`数据 ${index + 1}`}
                 />
                 {facts.data.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeArrayItem('data', index)}
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => removeArrayItem('data', index)}>
                     ×
                   </Button>
                 )}
@@ -1008,10 +842,7 @@ function ClarifyStep({ analysis, answers, setAnswers, onSubmit, onSkip }: Clarif
             跳过，直接生成
           </Button>
         )}
-        <Button
-          onClick={onSubmit}
-          disabled={!allAnswered && !analysis.canProceedWithoutClarification}
-        >
+        <Button onClick={onSubmit} disabled={!allAnswered && !analysis.canProceedWithoutClarification}>
           提交回答，生成稿件
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
@@ -1042,9 +873,7 @@ function ReviewStep({ draft, onApprove, onReset }: ReviewStepProps) {
           {/* Title */}
           <div>
             <h2 className="text-2xl font-bold">{draft.title}</h2>
-            {draft.subtitle && (
-              <p className="text-lg text-muted-foreground mt-1">{draft.subtitle}</p>
-            )}
+            {draft.subtitle && <p className="text-lg text-muted-foreground mt-1">{draft.subtitle}</p>}
           </div>
 
           <Separator />
